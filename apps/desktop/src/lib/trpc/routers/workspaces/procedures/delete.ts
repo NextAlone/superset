@@ -20,13 +20,7 @@ import {
 	markWorkspaceAsDeleting,
 	updateActiveWorkspaceIfRemoved,
 } from "../utils/db-helpers";
-import {
-	deleteLocalBranch,
-	hasUncommittedChanges,
-	hasUnpushedCommits,
-	listExternalWorktrees,
-	worktreeExists,
-} from "../utils/git";
+import { getVcsProvider } from "../utils/vcs";
 import { removeWorktreeFromDisk, runTeardown } from "../utils/teardown";
 
 const normalizePath = (p: string): string => {
@@ -105,8 +99,9 @@ export const createDeleteProcedures = () => {
 				const project = getProject(workspace.projectId);
 
 				if (worktree && project) {
+					const vcs = getVcsProvider(project.mainRepoPath);
 					try {
-						const exists = await worktreeExists(
+						const exists = await vcs.workspaceExists(
 							project.mainRepoPath,
 							worktree.path,
 						);
@@ -125,8 +120,8 @@ export const createDeleteProcedures = () => {
 						}
 
 						const [hasChanges, unpushedCommits] = await Promise.all([
-							hasUncommittedChanges(worktree.path),
-							hasUnpushedCommits(worktree.path),
+							vcs.hasUncommittedChanges(worktree.path),
+							vcs.hasUnpushedCommits(worktree.path),
 						]);
 
 						return {
@@ -262,11 +257,12 @@ export const createDeleteProcedures = () => {
 				}
 
 				if (worktree && project) {
+					const vcsDelete = getVcsProvider(project.mainRepoPath);
 					await workspaceInitManager.acquireProjectLock(project.id);
 
 					try {
 						// Safety: prevent deletion of worktrees not tracked in our DB
-						const allGitWorktrees = await listExternalWorktrees(
+						const allGitWorktrees = await vcsDelete.listExternalWorkspaces(
 							project.mainRepoPath,
 						);
 
@@ -312,7 +308,7 @@ export const createDeleteProcedures = () => {
 
 					if (input.deleteLocalBranch && workspace.branch) {
 						try {
-							await deleteLocalBranch({
+							await vcsDelete.deleteLocalBranch({
 								mainRepoPath: project.mainRepoPath,
 								branch: workspace.branch,
 							});
@@ -417,8 +413,9 @@ export const createDeleteProcedures = () => {
 					};
 				}
 
+				const vcsCanDel = getVcsProvider(project.mainRepoPath);
 				try {
-					const exists = await worktreeExists(
+					const exists = await vcsCanDel.workspaceExists(
 						project.mainRepoPath,
 						worktree.path,
 					);
@@ -436,8 +433,8 @@ export const createDeleteProcedures = () => {
 					}
 
 					const [hasChanges, unpushedCommits] = await Promise.all([
-						hasUncommittedChanges(worktree.path),
-						hasUnpushedCommits(worktree.path),
+						vcsCanDel.hasUncommittedChanges(worktree.path),
+						vcsCanDel.hasUnpushedCommits(worktree.path),
 					]);
 
 					return {
@@ -479,16 +476,17 @@ export const createDeleteProcedures = () => {
 					return { success: false, error: "Project not found" };
 				}
 
+				const vcsDelWt = getVcsProvider(project.mainRepoPath);
 				await workspaceInitManager.acquireProjectLock(project.id);
 
 				try {
-					const exists = await worktreeExists(
+					const exists = await vcsDelWt.workspaceExists(
 						project.mainRepoPath,
 						worktree.path,
 					);
 
 					// Safety: prevent deletion of worktrees not tracked in our DB
-					const allGitWorktrees = await listExternalWorktrees(
+					const allGitWorktrees = await vcsDelWt.listExternalWorkspaces(
 						project.mainRepoPath,
 					);
 

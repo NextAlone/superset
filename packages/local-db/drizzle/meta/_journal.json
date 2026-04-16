@@ -281,6 +281,13 @@
       "when": 1775765690176,
       "tag": "0039_add_expose_host_service_via_relay_setting",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1776556800000,
+      "tag": "0040_add_vcs_type_to_projects",
+      "breakpoints": true
     }
   ]
 }

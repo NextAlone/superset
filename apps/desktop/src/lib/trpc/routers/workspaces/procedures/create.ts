@@ -24,18 +24,13 @@ import {
 import {
 	createWorktreeFromPr,
 	generateBranchName,
-	getBranchWorktreePath,
-	getCurrentBranch,
 	getPrInfo,
 	getPrLocalBranchName,
-	listBranches,
-	listExternalWorktrees,
 	type PullRequestInfo,
 	parsePrUrl,
-	safeCheckoutBranch,
 	sanitizeBranchNameWithMaxLength,
-	worktreeExists,
-} from "../utils/git";
+} from "../utils/vcs";
+import { getVcsProvider } from "../utils/vcs";
 import { resolveWorktreePath } from "../utils/resolve-worktree-path";
 import { copySupersetConfigToWorktree, loadSetupConfig } from "../utils/setup";
 import {
@@ -145,7 +140,8 @@ async function getKnownBranchesSafe(
 	repoPath: string,
 ): Promise<string[] | undefined> {
 	try {
-		const { local, remote } = await listBranches(repoPath);
+		const vcs = getVcsProvider(repoPath);
+		const { local, remote } = await vcs.listBranches(repoPath);
 		return [...local, ...remote];
 	} catch (error) {
 		console.warn(
@@ -162,7 +158,8 @@ async function handleNewWorktree({
 	localBranchName,
 	workspaceName,
 }: HandleNewWorktreeParams): Promise<PrWorkspaceResult> {
-	const existingWorktreePath = await getBranchWorktreePath({
+	const vcs = getVcsProvider(project.mainRepoPath);
+	const existingWorktreePath = await vcs.getBranchWorkspacePath({
 		mainRepoPath: project.mainRepoPath,
 		branch: localBranchName,
 	});
@@ -295,6 +292,7 @@ export const createCreateProcedures = () => {
 				if (!project) {
 					throw new Error(`Project ${input.projectId} not found`);
 				}
+				const vcs = getVcsProvider(project.mainRepoPath);
 				const requestedCompareBaseBranch = input.compareBaseBranch;
 
 				const sourceWorkspace = input.sourceWorkspaceId
@@ -327,7 +325,7 @@ export const createCreateProcedures = () => {
 						);
 					}
 
-					const existingWorktreePath = await getBranchWorktreePath({
+					const existingWorktreePath = await vcs.getBranchWorkspacePath({
 						mainRepoPath: project.mainRepoPath,
 						branch: existingBranchName,
 					});
@@ -338,7 +336,7 @@ export const createCreateProcedures = () => {
 					}
 				}
 
-				const { local, remote } = await listBranches(project.mainRepoPath);
+				const { local, remote } = await vcs.listBranches(project.mainRepoPath);
 				const existingBranches = [...local, ...remote];
 
 				// Resolve branch prefix using shared utility
@@ -558,14 +556,15 @@ export const createCreateProcedures = () => {
 					throw new Error(`Project ${input.projectId} not found`);
 				}
 
+				const vcsMain = getVcsProvider(project.mainRepoPath);
 				const branch =
-					input.branch || (await getCurrentBranch(project.mainRepoPath));
+					input.branch || (await vcsMain.getCurrentBranch(project.mainRepoPath));
 				if (!branch) {
 					throw new Error("Could not determine current branch");
 				}
 
 				if (input.branch) {
-					await safeCheckoutBranch(project.mainRepoPath, input.branch);
+					await vcsMain.safeCheckoutBranch(project.mainRepoPath, input.branch);
 				}
 
 				const existing = getBranchWorkspace(input.projectId);
@@ -686,7 +685,8 @@ export const createCreateProcedures = () => {
 					throw new Error(`Project ${worktree.projectId} not found`);
 				}
 
-				const exists = await worktreeExists(
+				const vcsWt = getVcsProvider(project.mainRepoPath);
+				const exists = await vcsWt.workspaceExists(
 					project.mainRepoPath,
 					worktree.path,
 				);
@@ -813,6 +813,7 @@ export const createCreateProcedures = () => {
 				if (!project) {
 					throw new Error(`Project ${input.projectId} not found`);
 				}
+				const vcsImport = getVcsProvider(project.mainRepoPath);
 				const knownBranches = await getKnownBranchesSafe(project.mainRepoPath);
 				const compareBaseBranch = resolveWorkspaceBaseBranch({
 					workspaceBaseBranch: project.workspaceBaseBranch,
@@ -843,7 +844,7 @@ export const createCreateProcedures = () => {
 
 					if (existingWorkspace) continue;
 
-					const exists = await worktreeExists(project.mainRepoPath, wt.path);
+					const exists = await vcsImport.workspaceExists(project.mainRepoPath, wt.path);
 					if (!exists) continue;
 
 					const maxTabOrder = getMaxProjectChildTabOrder(input.projectId);
@@ -864,7 +865,7 @@ export const createCreateProcedures = () => {
 				}
 
 				// 2. Import external worktrees (on disk, not tracked in DB)
-				const allExternalWorktrees = await listExternalWorktrees(
+				const allExternalWorktrees = await vcsImport.listExternalWorkspaces(
 					project.mainRepoPath,
 				);
 				const trackedPaths = new Set(projectWorktrees.map((wt) => wt.path));

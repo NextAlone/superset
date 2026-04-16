@@ -25,13 +25,17 @@ export {
   getPrLocalBranchName,
   createWorktreeFromPr,
   sanitizeBranchName,
+  sanitizeBranchNameWithMaxLength,
   sanitizeAuthorPrefix,
   sanitizeGitError,
   checkBranchCheckoutSafety,
   checkNeedsRebase,
   detectBaseBranch,
   getStatusNoLock,
+  NotGitRepoError,
 } from "../git";
+
+export type { PullRequestInfo } from "../git";
 
 const providerCache = new Map<string, VcsProvider>();
 let jjAvailabilityResult: boolean | null = null;

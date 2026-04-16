@@ -254,3 +254,10 @@ export type BranchPrefixMode = (typeof BRANCH_PREFIX_MODES)[number];
 export const FILE_OPEN_MODES = ["split-pane", "new-tab"] as const;
 
 export type FileOpenMode = (typeof FILE_OPEN_MODES)[number];
+
+/**
+ * VCS provider type
+ */
+export const VcsType = z.enum(["git", "jj"]);
+
+export type VcsType = z.infer<typeof VcsType>;

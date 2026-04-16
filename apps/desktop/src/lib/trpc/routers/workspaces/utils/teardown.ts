@@ -7,7 +7,7 @@ import {
 } from "main/lib/agent-setup/shell-wrappers";
 import { buildSafeEnv, sanitizeEnv } from "main/lib/terminal/env";
 import { SUPERSET_DIR_NAME } from "shared/constants";
-import { removeWorktree } from "./git";
+import { getVcsProvider } from "./vcs";
 import { loadSetupConfig } from "./setup";
 
 const TEARDOWN_TIMEOUT_MS = 60_000;
@@ -147,7 +147,8 @@ export async function removeWorktreeFromDisk({
 	worktreePath: string;
 }): Promise<{ success: true } | { success: false; error: string }> {
 	try {
-		await removeWorktree(mainRepoPath, worktreePath);
+		const vcs = getVcsProvider(mainRepoPath);
+		await vcs.removeWorkspace(mainRepoPath, worktreePath);
 		return { success: true };
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
