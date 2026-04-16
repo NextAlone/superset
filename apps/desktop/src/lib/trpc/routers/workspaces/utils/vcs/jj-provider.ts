@@ -372,11 +372,32 @@ export class JjProvider implements VcsProvider {
         "get",
         'revset-aliases."trunk()"',
       ]);
-      // e.g. "main@origin" or "main"
-      if (output.includes("@")) {
-        return output.slice(0, output.indexOf("@"));
+      // Could be:
+      //   "main@origin"
+      //   "main"
+      //   'latest(remote_bookmarks(exact:"main", exact:"origin"))'
+      // Extract the bookmark name from any format
+      const trimmed = output.trim();
+      if (!trimmed) return "main";
+
+      // Simple form: "main@origin" → "main"
+      if (/^[\w.\-/]+@[\w.\-/]+$/.test(trimmed)) {
+        return trimmed.slice(0, trimmed.indexOf("@"));
       }
-      return output || "main";
+
+      // Complex revset: extract first quoted string as bookmark name
+      // e.g. latest(remote_bookmarks(exact:"main", ...)) → "main"
+      const quoted = trimmed.match(/exact:"([^"]+)"/);
+      if (quoted?.[1]) {
+        return quoted[1];
+      }
+
+      // Plain bookmark name
+      if (/^[\w.\-/]+$/.test(trimmed)) {
+        return trimmed;
+      }
+
+      return "main";
     } catch {
       return "main";
     }
