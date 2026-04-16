@@ -136,6 +136,15 @@ async function initGitRepo(path: string): Promise<{ defaultBranch: string }> {
 	return { defaultBranch };
 }
 
+/**
+ * Returns true if the value looks like a raw jj revset expression rather than
+ * a plain bookmark / branch name.  Used to detect stale DB entries that stored
+ * the unparsed `trunk()` alias (e.g. `latest(remote_bookmarks(exact:"main", …))`).
+ */
+function looksLikeRevsetExpression(value: string): boolean {
+	return /[("']/.test(value);
+}
+
 /** Insert or update a project record in the local database, returning the persisted row. */
 function upsertProject(mainRepoPath: string, defaultBranch: string): Project {
 	const name = basename(mainRepoPath);
@@ -704,8 +713,9 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					);
 
 					const defaultBranch =
-						project.defaultBranch ||
-						(await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath));
+						(project.defaultBranch && !looksLikeRevsetExpression(project.defaultBranch))
+							? project.defaultBranch
+							: await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath);
 
 					branches.sort((a, b) => {
 						if (a.name === defaultBranch) return -1;
@@ -880,7 +890,7 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 
 					const defaultBranch =
 						remoteDefaultBranch ||
-						project.defaultBranch ||
+						(project.defaultBranch && !looksLikeRevsetExpression(project.defaultBranch) ? project.defaultBranch : null) ||
 						(await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath));
 
 					if (defaultBranch !== project.defaultBranch) {
@@ -1018,8 +1028,9 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					}
 
 					const defaultBranch =
-						project.defaultBranch ||
-						(await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath));
+						(project.defaultBranch && !looksLikeRevsetExpression(project.defaultBranch))
+							? project.defaultBranch
+							: await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath);
 
 					// Sort: default branch first, then local before remote, then by date
 					const allBranches = Array.from(branchMap.entries())

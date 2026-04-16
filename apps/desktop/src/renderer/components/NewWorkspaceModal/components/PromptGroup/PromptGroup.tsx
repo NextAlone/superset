@@ -387,12 +387,12 @@ function CompareBaseBranchPickerInline({
 						})}
 					</div>
 					<CommandInput
-						placeholder="Search branches..."
+						placeholder={isJj ? "Search bookmarks..." : "Search branches..."}
 						value={branchSearch}
 						onValueChange={setBranchSearch}
 					/>
 					<CommandList className="max-h-[400px]">
-						<CommandEmpty>No branches found</CommandEmpty>
+						<CommandEmpty>{isJj ? "No bookmarks found" : "No branches found"}</CommandEmpty>
 						{displayBranches.map((branch) => {
 							const openAction = openableWorktrees.get(branch.name);
 							const activeWorkspaceId = activeWorkspacesByBranch.get(
@@ -1213,7 +1213,7 @@ ${sanitizeText(truncatedBody)}`;
 						className={cn(
 							"border-none bg-transparent dark:bg-transparent shadow-none text-xs font-mono text-muted-foreground/60 px-0 h-auto focus-visible:ring-0 placeholder:text-muted-foreground/30 focus:text-muted-foreground text-right placeholder:text-right overflow-hidden text-ellipsis",
 						)}
-						placeholder="branch name"
+						placeholder={project?.vcsType === "jj" ? "bookmark name" : "branch name"}
 						value={branchName}
 						onChange={(e) =>
 							updateDraft({

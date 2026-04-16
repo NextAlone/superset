@@ -249,19 +249,36 @@ export class JjProvider implements VcsProvider {
     mainRepoPath: string,
   ): Promise<ExternalWorkspace[]> {
     try {
-      const output = await git(mainRepoPath, [
-        "worktree",
-        "list",
-        "--porcelain",
-      ]);
-      const entries = parseWorktreePorcelain(output);
-      // Skip the main worktree (first entry)
-      return entries.slice(1).map((e) => ({
-        path: e.path,
-        branch: e.branch,
-        isDetached: e.isDetached,
-        isBare: e.isBare,
-      }));
+      const output = await jj(mainRepoPath, ["workspace", "list"]);
+      // Each line: "<name>: <change_id> <commit_id> <description>"
+      const lines = output.split("\n").filter((l) => l.trim());
+      const entries: ExternalWorkspace[] = [];
+
+      for (const line of lines) {
+        const colonIdx = line.indexOf(":");
+        if (colonIdx < 0) continue;
+        const name = line.slice(0, colonIdx).trim();
+        if (name === "default") continue; // skip main workspace
+
+        try {
+          const wsPath = await jj(mainRepoPath, [
+            "workspace",
+            "root",
+            "--name",
+            name,
+          ]);
+          entries.push({
+            path: wsPath.trim(),
+            branch: name, // workspace name as "branch"
+            isDetached: false,
+            isBare: false,
+          });
+        } catch {
+          // workspace may be stale
+        }
+      }
+
+      return entries;
     } catch {
       return [];
     }
@@ -273,14 +290,14 @@ export class JjProvider implements VcsProvider {
   }): Promise<string | null> {
     const { mainRepoPath, branch } = params;
     try {
-      const output = await git(mainRepoPath, [
-        "worktree",
-        "list",
-        "--porcelain",
+      // In jj, "branch" here is actually the workspace name
+      const wsPath = await jj(mainRepoPath, [
+        "workspace",
+        "root",
+        "--name",
+        branch,
       ]);
-      const entries = parseWorktreePorcelain(output);
-      const match = entries.find((e) => e.branch === branch);
-      return match?.path ?? null;
+      return wsPath.trim() || null;
     } catch {
       return null;
     }
