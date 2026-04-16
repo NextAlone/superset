@@ -284,6 +284,7 @@ function CompareBaseBranchPickerInline({
 	activeWorkspacesByBranch,
 	externalWorktreeBranches,
 	modKey,
+	isJj,
 	onSelectCompareBaseBranch,
 	onOpenWorktree,
 	onOpenActiveWorkspace,
@@ -298,6 +299,7 @@ function CompareBaseBranchPickerInline({
 	activeWorkspacesByBranch: Map<string, string>;
 	externalWorktreeBranches: Set<string>;
 	modKey: string;
+	isJj?: boolean;
 	onSelectCompareBaseBranch: (branchName: string) => void;
 	onOpenWorktree: (action: OpenableWorktreeAction) => void;
 	onOpenActiveWorkspace: (workspaceId: string) => void;
@@ -378,7 +380,7 @@ function CompareBaseBranchPickerInline({
 											: "text-muted-foreground hover:text-foreground",
 									)}
 								>
-									{value === "all" ? "All" : "Worktrees"}
+									{value === "all" ? "All" : isJj ? "Workspaces" : "Worktrees"}
 									<span className="ml-1 text-foreground/40">{count}</span>
 								</button>
 							);
@@ -1088,6 +1090,7 @@ ${sanitizeText(truncatedBody)}`;
 	const handleOpenWorktree = useCallback(
 		(action: OpenableWorktreeAction) => {
 			if (!projectId) return;
+			const label = project?.vcsType === "jj" ? "workspace" : "worktree";
 
 			if (action.type === "tracked") {
 				void runAsyncAction(
@@ -1095,10 +1098,10 @@ ${sanitizeText(truncatedBody)}`;
 						worktreeId: action.worktreeId,
 					}),
 					{
-						loading: "Opening worktree...",
-						success: "Worktree opened",
+						loading: `Opening ${label}...`,
+						success: `${label === "workspace" ? "Workspace" : "Worktree"} opened`,
 						error: (err) =>
-							err instanceof Error ? err.message : "Failed to open worktree",
+							err instanceof Error ? err.message : `Failed to open ${label}`,
 					},
 				);
 			} else {
@@ -1109,16 +1112,17 @@ ${sanitizeText(truncatedBody)}`;
 						branch: action.branch,
 					}),
 					{
-						loading: "Opening worktree...",
-						success: "Worktree opened",
+						loading: `Opening ${label}...`,
+						success: `${label === "workspace" ? "Workspace" : "Worktree"} opened`,
 						error: (err) =>
-							err instanceof Error ? err.message : "Failed to open worktree",
+							err instanceof Error ? err.message : `Failed to open ${label}`,
 					},
 				);
 			}
 		},
 		[
 			projectId,
+			project?.vcsType,
 			runAsyncAction,
 			openExternalWorktree.mutateAsync,
 			openTrackedWorktree.mutateAsync,
@@ -1413,6 +1417,7 @@ ${sanitizeText(truncatedBody)}`;
 									activeWorkspacesByBranch={activeWorkspacesByBranch}
 									externalWorktreeBranches={externalWorktreeBranches}
 									modKey={modKey}
+									isJj={project?.vcsType === "jj"}
 									onSelectCompareBaseBranch={handleCompareBaseBranchSelect}
 									onOpenWorktree={handleOpenWorktree}
 									onOpenActiveWorkspace={handleOpenActiveWorkspace}

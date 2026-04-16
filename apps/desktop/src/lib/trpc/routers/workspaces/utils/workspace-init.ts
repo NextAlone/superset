@@ -107,7 +107,7 @@ export async function initializeWorkspaceWorktree({
 				manager.updateProgress(
 					workspaceId,
 					"creating_worktree",
-					"Creating git worktree...",
+					`Creating ${vcs.type === "jj" ? "workspace" : "git worktree"}...`,
 				);
 				await vcs.createWorkspaceFromExistingBranch({
 					mainRepoPath,
@@ -457,7 +457,7 @@ export async function initializeWorkspaceWorktree({
 		manager.updateProgress(
 			workspaceId,
 			"creating_worktree",
-			"Creating git worktree...",
+			`Creating ${vcs.type === "jj" ? "workspace" : "git worktree"}...`,
 		);
 		await vcs.createWorkspace({ mainRepoPath, branch, workspacePath: worktreePath, startPoint });
 		manager.markWorktreeCreated(workspaceId);
