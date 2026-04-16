@@ -300,10 +300,21 @@ export class JjProvider implements VcsProvider {
         "-T",
         "bookmarks",
       ]);
-      if (!output) return null;
-      // First word, strip trailing '*'
-      const first = output.split(/\s/)[0];
-      return first ? first.replace(/\*$/, "") : null;
+      if (output) {
+        // First word, strip trailing '*'
+        const first = output.split(/\s/)[0];
+        if (first) return first.replace(/\*$/, "");
+      }
+      // jj working copy often has no bookmark — use short change_id as fallback
+      const changeId = await jj(repoPath, [
+        "log",
+        "-r",
+        "@",
+        "--no-graph",
+        "-T",
+        "change_id.shortest()",
+      ]);
+      return changeId.trim() || null;
     } catch {
       return null;
     }
