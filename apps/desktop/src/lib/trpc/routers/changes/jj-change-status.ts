@@ -1,14 +1,13 @@
-import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 import type { ChangedFile } from "shared/changes-types";
+import { z } from "zod";
 import { publicProcedure, router } from "../..";
-import { execWithShellEnv } from "../workspaces/utils/shell-env";
 import {
+	applyJjDiffStat,
 	findJjRepoRoot,
 	parseJjDiffSummary,
-	applyJjDiffStat,
 } from "./jj-status";
 import { assertRegisteredWorktree } from "./security/path-validation";
+import { jj } from "./utils/jj-cli";
 import { clearStatusCacheForWorktree } from "./utils/status-cache";
 
 // ---------------------------------------------------------------------------
@@ -44,19 +43,6 @@ export interface JjChangeStatus {
 	ancestors: JjRevision[];
 
 	hasConflicts: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Local jj CLI helper
-// ---------------------------------------------------------------------------
-
-async function jj(repoPath: string, args: string[]): Promise<string> {
-	const { stdout } = await execWithShellEnv(
-		"jj",
-		["--no-pager", "--color=never", "-R", repoPath, ...args],
-		{ cwd: repoPath },
-	);
-	return stdout.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +83,16 @@ function parseAncestors(output: string): JjRevision[] {
 		if (!line.trim()) continue;
 		const parts = line.split("\t");
 		if (parts.length < 7) continue;
-		const [changeId, commitId, shortCommitId, description, author, timestamp, bookmarksRaw, emptyRaw] = parts;
+		const [
+			changeId,
+			commitId,
+			shortCommitId,
+			description,
+			author,
+			timestamp,
+			bookmarksRaw,
+			emptyRaw,
+		] = parts;
 		revisions.push({
 			changeId: changeId ?? "",
 			commitId: commitId ?? "",
@@ -148,14 +143,14 @@ export function createJjRouter() {
 				const baseRef = await resolveBaseRef(repoRoot, baseBookmark);
 
 				const ANCESTOR_TEMPLATE = [
-					'change_id.shortest()',
-					'commit_id',
-					'commit_id.short(7)',
-					'description.first_line()',
-					'author.name()',
+					"change_id.shortest()",
+					"commit_id",
+					"commit_id.short(7)",
+					"description.first_line()",
+					"author.name()",
 					'author.timestamp().format("%Y-%m-%dT%H:%M:%S%z")',
-					'bookmarks',
-					'empty',
+					"bookmarks",
+					"empty",
 				].join(' ++ "\\t" ++ ');
 
 				const [

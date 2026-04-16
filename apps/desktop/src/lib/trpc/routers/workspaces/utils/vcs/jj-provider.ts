@@ -5,50 +5,13 @@ import { mkdir, rename } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { execWithShellEnv } from "../shell-env";
+import { jj } from "../../../changes/utils/jj-cli";
 import type {
   BranchExistsOnRemoteResult,
   ExternalWorkspace,
   VcsProvider,
   VcsType,
 } from "./types";
-
-// ---------------------------------------------------------------------------
-// Repo-level mutex — serialise jj CLI calls to avoid store-lock contention
-// ---------------------------------------------------------------------------
-
-const repoLocks = new Map<string, Promise<unknown>>();
-
-async function withRepoLock<T>(
-  repoPath: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const prev = repoLocks.get(repoPath) ?? Promise.resolve();
-  // Always chain — even if prev rejected we still want to run fn
-  const next = prev.then(fn, fn) as Promise<T>;
-  repoLocks.set(repoPath, next);
-  try {
-    return await next;
-  } finally {
-    if (repoLocks.get(repoPath) === next) {
-      repoLocks.delete(repoPath);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Core CLI helpers
-// ---------------------------------------------------------------------------
-
-async function jj(repoPath: string, args: string[]): Promise<string> {
-  return withRepoLock(repoPath, async () => {
-    const { stdout } = await execWithShellEnv(
-      "jj",
-      ["--no-pager", "--color=never", "-R", repoPath, ...args],
-      { cwd: repoPath },
-    );
-    return stdout.trim();
-  });
-}
 
 async function git(repoPath: string, args: string[]): Promise<string> {
   const { stdout } = await execWithShellEnv("git", args, { cwd: repoPath });
