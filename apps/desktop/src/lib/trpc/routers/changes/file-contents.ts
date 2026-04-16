@@ -211,7 +211,7 @@ async function jjFileShow(
 	const env = await getProcessEnvWithShellPath();
 	const { stdout } = await execFileAsync(
 		"jj",
-		["--no-pager", "--color=never", "-R", repoPath, "file", "show", "-r", rev, filePath],
+		["--no-pager", "--color=never", "-R", repoPath, "file", "show", "-r", rev, `root:${filePath}`],
 		{ timeout: 30_000, env },
 	);
 	return stdout;
@@ -224,7 +224,8 @@ async function safeJjFileShow(
 ): Promise<string | null> {
 	try {
 		return await jjFileShow(repoPath, rev, filePath);
-	} catch {
+	} catch (error) {
+		console.error(`[jjFileShow] Failed: rev=${rev} path=${filePath} repo=${repoPath}`, error instanceof Error ? error.message : error);
 		return null;
 	}
 }
