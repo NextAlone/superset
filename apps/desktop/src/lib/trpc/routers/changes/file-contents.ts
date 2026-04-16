@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { FileContents } from "shared/changes-types";
 import { detectLanguage } from "shared/detect-language";
 import type { SimpleGit } from "simple-git";
@@ -5,6 +7,9 @@ import { z } from "zod";
 import { publicProcedure, router } from "../..";
 import { toRegisteredWorktreeRelativePath } from "../workspace-fs-service";
 import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
+import { detectVcsType } from "../workspaces/utils/vcs";
+
+const execFileAsync = promisify(execFile);
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -22,7 +27,6 @@ export const createFileContentsRouter = () => {
 				}),
 			)
 			.query(async ({ input }): Promise<FileContents> => {
-				const git = await getSimpleGitWithShellPath(input.worktreePath);
 				const defaultBranch = input.defaultBranch || "main";
 				const filePath = toRegisteredWorktreeRelativePath(
 					input.worktreePath,
@@ -35,14 +39,29 @@ export const createFileContentsRouter = () => {
 						)
 					: filePath;
 
-				const versions = await getGitOnlyVersions(
-					git,
-					filePath,
-					originalPath,
-					input.category,
-					defaultBranch,
-					input.commitHash,
-				);
+				const vcsType = detectVcsType(input.worktreePath);
+				let versions: FileVersions;
+
+				if (vcsType === "jj") {
+					versions = await getJjVersions(
+						input.worktreePath,
+						filePath,
+						originalPath,
+						input.category,
+						defaultBranch,
+						input.commitHash,
+					);
+				} else {
+					const git = await getSimpleGitWithShellPath(input.worktreePath);
+					versions = await getGitOnlyVersions(
+						git,
+						filePath,
+						originalPath,
+						input.category,
+						defaultBranch,
+						input.commitHash,
+					);
+				}
 
 				return {
 					original: versions.original,
@@ -60,7 +79,6 @@ export const createFileContentsRouter = () => {
 				}),
 			)
 			.query(async ({ input }): Promise<{ content: string }> => {
-				const git = await getSimpleGitWithShellPath(input.worktreePath);
 				const originalPath = input.oldAbsolutePath
 					? toRegisteredWorktreeRelativePath(
 							input.worktreePath,
@@ -71,6 +89,18 @@ export const createFileContentsRouter = () => {
 							input.absolutePath,
 						);
 
+				const vcsType = detectVcsType(input.worktreePath);
+
+				if (vcsType === "jj") {
+					const content = await safeJjFileShow(
+						input.worktreePath,
+						"@-",
+						originalPath,
+					);
+					return { content: content ?? "" };
+				}
+
+				const git = await getSimpleGitWithShellPath(input.worktreePath);
 				const staged = await safeGitShow(git, `:0:${originalPath}`);
 				const content =
 					staged ?? (await safeGitShow(git, `HEAD:${originalPath}`));
@@ -167,4 +197,73 @@ async function getStagedVersions(
 	]);
 
 	return { original: original ?? "", modified: modified ?? "" };
+}
+
+// ── jj helpers ────────────────────────────────────────────────────────────────
+
+async function jjFileShow(
+	repoPath: string,
+	rev: string,
+	filePath: string,
+): Promise<string> {
+	const { stdout } = await execFileAsync(
+		"jj",
+		["--no-pager", "--color=never", "-R", repoPath, "file", "show", "-r", rev, filePath],
+		{ timeout: 30_000 },
+	);
+	return stdout;
+}
+
+async function safeJjFileShow(
+	repoPath: string,
+	rev: string,
+	filePath: string,
+): Promise<string | null> {
+	try {
+		return await jjFileShow(repoPath, rev, filePath);
+	} catch {
+		return null;
+	}
+}
+
+async function getJjVersions(
+	repoPath: string,
+	filePath: string,
+	originalPath: string,
+	category: "against-base" | "committed" | "staged",
+	defaultBranch: string,
+	commitHash?: string,
+): Promise<FileVersions> {
+	switch (category) {
+		case "against-base": {
+			// Use trunk() as the base — parallel to origin/<defaultBranch> in git
+			const baseRev = `trunk()`;
+			const [original, modified] = await Promise.all([
+				safeJjFileShow(repoPath, baseRev, originalPath),
+				safeJjFileShow(repoPath, "@", filePath),
+			]);
+			return { original: original ?? "", modified: modified ?? "" };
+		}
+
+		case "committed": {
+			if (!commitHash) {
+				throw new Error("commitHash required for committed category");
+			}
+			// jj uses `<rev>-` for parent (not `^` like git)
+			const [original, modified] = await Promise.all([
+				safeJjFileShow(repoPath, `${commitHash}-`, originalPath),
+				safeJjFileShow(repoPath, commitHash, filePath),
+			]);
+			return { original: original ?? "", modified: modified ?? "" };
+		}
+
+		case "staged": {
+			// jj has no staging area; treat as working-copy diff against parent
+			const [original, modified] = await Promise.all([
+				safeJjFileShow(repoPath, "@-", originalPath),
+				safeJjFileShow(repoPath, "@", filePath),
+			]);
+			return { original: original ?? "", modified: modified ?? "" };
+		}
+	}
 }
