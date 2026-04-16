@@ -26,6 +26,7 @@ import {
 	type BookmarkPromptRequest,
 } from "./components/BookmarkPromptDialog";
 import { ConfirmDialog, type ConfirmRequest } from "./components/ConfirmDialog";
+import { ConflictEditor } from "./components/ConflictEditor";
 import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
 import { RevisionRow } from "./components/RevisionRow";
 
@@ -200,6 +201,17 @@ export function JjChangesView({
 	const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(
 		null,
 	);
+
+	// ---- Conflict editor state --------------------------------------------
+	const [conflictEditorOpen, setConflictEditorOpen] = useState(false);
+	const conflictListQuery = electronTrpc.changes.jjConflictList.useQuery(
+		{ worktreePath: worktreePath ?? "" },
+		{
+			enabled: !!worktreePath && (changeStatus?.hasConflicts ?? false),
+			refetchInterval: 3000,
+		},
+	);
+	const conflictCount = conflictListQuery.data?.length ?? 0;
 
 	// ---- Sync description from server → local state -----------------------
 	useEffect(() => {
@@ -549,6 +561,26 @@ export function JjChangesView({
 				</div>
 			</div>
 
+			{/* Conflict warning bar */}
+			{changeStatus.hasConflicts && (
+				<div className="flex items-center gap-2 px-2 py-1.5 border-b border-border bg-yellow-500/10 shrink-0">
+					<VscWarning className="size-3.5 text-yellow-500 shrink-0" />
+					<span className="text-[11px] flex-1 min-w-0 truncate">
+						{conflictCount > 0
+							? `${conflictCount} file${conflictCount === 1 ? "" : "s"} have conflicts`
+							: "Change has conflicts"}
+					</span>
+					<Button
+						variant="outline"
+						size="sm"
+						className="h-6 text-[11px] px-2"
+						onClick={() => setConflictEditorOpen(true)}
+					>
+						Resolve…
+					</Button>
+				</div>
+			)}
+
 			{/* Content */}
 			{!hasChanges ? (
 				<div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-muted-foreground">
@@ -731,6 +763,15 @@ export function JjChangesView({
 					squashIntoMutation.isPending ||
 					rebaseMutation.isPending
 				}
+			/>
+			<ConflictEditor
+				worktreePath={worktreePath}
+				open={conflictEditorOpen}
+				onOpenChange={setConflictEditorOpen}
+				onResolved={() => {
+					conflictListQuery.refetch();
+					refetch();
+				}}
 			/>
 		</div>
 	);

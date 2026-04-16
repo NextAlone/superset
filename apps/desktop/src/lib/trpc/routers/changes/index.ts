@@ -3,6 +3,7 @@ import { createBranchesRouter } from "./branches";
 import { createFileContentsRouter } from "./file-contents";
 import { createGitOperationsRouter } from "./git-operations";
 import { createJjRouter } from "./jj-change-status";
+import { createJjConflictsRouter } from "./jj-conflicts";
 import { createJjMutationsRouter } from "./jj-mutations";
 import { createStagingRouter } from "./staging";
 import { createStatusRouter } from "./status";
@@ -15,6 +16,7 @@ export const createChangesRouter = () => {
 	const gitOperationsRouter = createGitOperationsRouter();
 	const jjRouter = createJjRouter();
 	const jjMutationsRouter = createJjMutationsRouter();
+	const jjConflictsRouter = createJjConflictsRouter();
 
 	return router({
 		// Branch operations
@@ -37,5 +39,8 @@ export const createChangesRouter = () => {
 
 		// Jj-native mutations (describe, commit, squash, edit, rebase, bookmarks)
 		...jjMutationsRouter._def.procedures,
+
+		// Jj conflict list / content / resolve
+		...jjConflictsRouter._def.procedures,
 	});
 };
