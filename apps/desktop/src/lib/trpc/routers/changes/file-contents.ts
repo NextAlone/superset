@@ -21,7 +21,7 @@ export const createFileContentsRouter = () => {
 					worktreePath: z.string(),
 					absolutePath: z.string(),
 					oldAbsolutePath: z.string().optional(),
-					category: z.enum(["against-base", "committed", "staged"]),
+					category: z.enum(["against-base", "committed", "staged", "unstaged"]),
 					commitHash: z.string().optional(),
 					defaultBranch: z.string().optional(),
 				}),
@@ -118,12 +118,13 @@ async function getGitOnlyVersions(
 	git: SimpleGit,
 	filePath: string,
 	originalPath: string,
-	category: "against-base" | "committed" | "staged",
+	category: "against-base" | "committed" | "staged" | "unstaged",
 	defaultBranch: string,
 	commitHash?: string,
 ): Promise<FileVersions> {
 	switch (category) {
 		case "against-base":
+		case "unstaged":
 			return getAgainstBaseVersions(git, filePath, originalPath, defaultBranch);
 
 		case "committed":
@@ -230,7 +231,7 @@ async function getJjVersions(
 	repoPath: string,
 	filePath: string,
 	originalPath: string,
-	category: "against-base" | "committed" | "staged",
+	category: "against-base" | "committed" | "staged" | "unstaged",
 	defaultBranch: string,
 	commitHash?: string,
 ): Promise<FileVersions> {
@@ -257,8 +258,9 @@ async function getJjVersions(
 			return { original: original ?? "", modified: modified ?? "" };
 		}
 
-		case "staged": {
-			// jj has no staging area; treat as working-copy diff against parent
+		case "staged":
+		case "unstaged": {
+			// jj has no staging area; both map to working-copy diff against parent
 			const [original, modified] = await Promise.all([
 				safeJjFileShow(repoPath, "@-", originalPath),
 				safeJjFileShow(repoPath, "@", filePath),
