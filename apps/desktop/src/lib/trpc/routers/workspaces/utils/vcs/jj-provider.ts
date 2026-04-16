@@ -342,6 +342,7 @@ export class JjProvider implements VcsProvider {
       const remote = new Set<string>();
 
       for (const line of output.split("\n")) {
+        if (!line || line.startsWith(" ")) continue; // skip empty + indented tracking lines (@git, @origin)
         const trimmed = line.trim();
         if (!trimmed) continue;
         // "name: ..." — local bookmark
@@ -352,7 +353,7 @@ export class JjProvider implements VcsProvider {
         if (key.includes("@")) {
           // remote: strip @remote suffix
           const name = key.slice(0, key.indexOf("@"));
-          remote.add(name);
+          if (name) remote.add(name);
         } else {
           local.add(key);
         }
