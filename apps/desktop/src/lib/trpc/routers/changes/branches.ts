@@ -139,7 +139,9 @@ export const createBranchesRouter = () => {
 				assertRegisteredWorktree(input.worktreePath);
 
 				const provider = getVcsProvider(input.worktreePath);
-				const currentBranch = await provider.getCurrentBranch(input.worktreePath);
+				const currentBranch =
+					(await provider.getCurrentBranch(input.worktreePath)) ||
+					(await provider.getDefaultBranch(input.worktreePath));
 				if (!currentBranch) {
 					throw new Error("Could not determine current branch");
 				}

@@ -558,7 +558,9 @@ export const createCreateProcedures = () => {
 
 				const vcsMain = getVcsProvider(project.mainRepoPath);
 				const branch =
-					input.branch || (await vcsMain.getCurrentBranch(project.mainRepoPath));
+					input.branch ||
+					(await vcsMain.getCurrentBranch(project.mainRepoPath)) ||
+					(await vcsMain.getDefaultBranch(project.mainRepoPath));
 				if (!branch) {
 					throw new Error("Could not determine current branch");
 				}
