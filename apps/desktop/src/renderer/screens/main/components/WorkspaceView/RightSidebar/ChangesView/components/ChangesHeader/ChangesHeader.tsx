@@ -45,10 +45,9 @@ interface ChangesHeaderProps {
 	onStashIncludeUntracked: () => void;
 	onStashPop: () => void;
 	isStashPending: boolean;
-	isJj?: boolean;
 }
 
-function BaseBranchSelector({ worktreePath, isJj }: { worktreePath: string; isJj?: boolean }) {
+function BaseBranchSelector({ worktreePath }: { worktreePath: string }) {
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
 	const utils = electronTrpc.useUtils();
@@ -71,18 +70,14 @@ function BaseBranchSelector({ worktreePath, isJj }: { worktreePath: string; isJj
 	const effectiveBaseBranch =
 		branchData?.worktreeBaseBranch ?? branchData?.defaultBranch ?? "main";
 	const sortedBranches = useMemo(() => {
-		// For jj repos without remote, fall back to local bookmarks
-		const source = isJj && !(branchData?.remote?.length)
-			? (branchData?.local?.map((b) => b.branch) ?? [])
-			: (branchData?.remote ?? []);
-		return [...source].sort((a, b) => {
+		return [...(branchData?.remote ?? [])].sort((a, b) => {
 			if (a === effectiveBaseBranch) return -1;
 			if (b === effectiveBaseBranch) return 1;
 			if (a === branchData?.defaultBranch) return -1;
 			if (b === branchData?.defaultBranch) return 1;
 			return a.localeCompare(b);
 		});
-	}, [branchData?.remote, branchData?.local, branchData?.defaultBranch, effectiveBaseBranch, isJj]);
+	}, [branchData?.remote, branchData?.defaultBranch, effectiveBaseBranch]);
 
 	const filteredBranches = useMemo(() => {
 		if (!search) return sortedBranches.filter(Boolean);
@@ -117,18 +112,18 @@ function BaseBranchSelector({ worktreePath, isJj }: { worktreePath: string; isJj
 					</PopoverTrigger>
 				</TooltipTrigger>
 				<TooltipContent side="top" showArrow={false}>
-					{isJj ? "Change base bookmark" : "Change base branch"}
+					Change base branch
 				</TooltipContent>
 			</Tooltip>
 			<PopoverContent align="start" className="w-56 p-0">
 				<Command shouldFilter={false}>
 					<CommandInput
-						placeholder={isJj ? "Search bookmarks..." : "Search branches..."}
+						placeholder="Search branches..."
 						value={search}
 						onValueChange={setSearch}
 					/>
 					<CommandList className="max-h-[200px]">
-						<CommandEmpty>{isJj ? "No bookmarks found" : "No branches found"}</CommandEmpty>
+						<CommandEmpty>No branches found</CommandEmpty>
 						{filteredBranches.map((branch) => (
 							<CommandItem
 								key={branch}
@@ -258,19 +253,16 @@ export function ChangesHeader({
 	onStashIncludeUntracked,
 	onStashPop,
 	isStashPending,
-	isJj,
 }: ChangesHeaderProps) {
 	return (
 		<div className="flex items-center gap-0.5 px-2 py-1.5">
-			<BaseBranchSelector worktreePath={worktreePath} isJj={isJj} />
-			{!isJj && (
-				<StashDropdown
-					onStash={onStash}
-					onStashIncludeUntracked={onStashIncludeUntracked}
-					onStashPop={onStashPop}
-					isPending={isStashPending}
-				/>
-			)}
+			<BaseBranchSelector worktreePath={worktreePath} />
+			<StashDropdown
+				onStash={onStash}
+				onStashIncludeUntracked={onStashIncludeUntracked}
+				onStashPop={onStashPop}
+				isPending={isStashPending}
+			/>
 			{showViewModeToggle && (
 				<ViewModeToggle
 					viewMode={viewMode}

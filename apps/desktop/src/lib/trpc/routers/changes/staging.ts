@@ -4,10 +4,6 @@ import { publicProcedure, router } from "../..";
 import { getServiceForRootPath } from "../workspace-fs-service";
 import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
 import {
-	detectVcsType,
-	getVcsProvider,
-} from "../workspaces/utils/vcs";
-import {
 	gitCheckoutFile,
 	gitDiscardAllStaged,
 	gitDiscardAllUnstaged,
@@ -66,13 +62,6 @@ export const createStagingRouter = () => {
 				}),
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.stageFile(input.worktreePath, input.filePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitStageFile(input.worktreePath, input.filePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -86,13 +75,6 @@ export const createStagingRouter = () => {
 				}),
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.unstageFile(input.worktreePath, input.filePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitUnstageFile(input.worktreePath, input.filePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -106,13 +88,6 @@ export const createStagingRouter = () => {
 				}),
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.discardFile(input.worktreePath, input.filePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitCheckoutFile(input.worktreePath, input.filePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -126,12 +101,6 @@ export const createStagingRouter = () => {
 				}),
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					// jj has no staging area — no-op
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitStageFiles(input.worktreePath, input.filePaths);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -145,12 +114,6 @@ export const createStagingRouter = () => {
 				}),
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					// jj has no staging area — no-op
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitUnstageFiles(input.worktreePath, input.filePaths);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -159,13 +122,6 @@ export const createStagingRouter = () => {
 		stageAll: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.stageAll(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitStageAll(input.worktreePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -174,13 +130,6 @@ export const createStagingRouter = () => {
 		unstageAll: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.unstageAll(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitUnstageAll(input.worktreePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -207,14 +156,6 @@ export const createStagingRouter = () => {
 		discardAllUnstaged: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					// jj restore handles everything; no separate file deletion needed
-					await vcs.discardAllUnstaged(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				// Must capture untracked files before git checkout removes status info
 				const untrackedFiles = await getUntrackedFilePaths(input.worktreePath);
 				await gitDiscardAllUnstaged(input.worktreePath);
@@ -226,14 +167,6 @@ export const createStagingRouter = () => {
 		discardAllStaged: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					// jj has no staging; restore all changes back to parent
-					await vcs.discardAllUnstaged(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				// Must capture staged new files before reset makes them untracked
 				const stagedNewFiles = await getStagedNewFilePaths(input.worktreePath);
 				await gitDiscardAllStaged(input.worktreePath);
@@ -245,13 +178,6 @@ export const createStagingRouter = () => {
 		stash: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.stash(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitStash(input.worktreePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -260,14 +186,6 @@ export const createStagingRouter = () => {
 		stashIncludeUntracked: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					// jj working copy is always a commit — stash is a no-op
-					await vcs.stash(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitStashIncludeUntracked(input.worktreePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
@@ -276,13 +194,6 @@ export const createStagingRouter = () => {
 		stashPop: publicProcedure
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
-				if (detectVcsType(input.worktreePath) === "jj") {
-					assertRegisteredWorktree(input.worktreePath);
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.stashPop(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 				await gitStashPop(input.worktreePath);
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };

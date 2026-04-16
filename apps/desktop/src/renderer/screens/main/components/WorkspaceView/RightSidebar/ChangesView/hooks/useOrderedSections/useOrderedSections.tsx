@@ -33,7 +33,6 @@ interface UseOrderedSectionsInput {
 	worktreePath: string;
 	projectId?: string;
 	isExpandedView?: boolean;
-	isJj?: boolean;
 	againstBaseFiles: ChangedFile[];
 	onAgainstBaseFileSelect: (file: ChangedFile) => void;
 	commitsWithFiles: CommitInfo[];
@@ -72,7 +71,6 @@ export function useOrderedSections({
 	worktreePath,
 	projectId,
 	isExpandedView,
-	isJj,
 	againstBaseFiles,
 	onAgainstBaseFileSelect,
 	commitsWithFiles,
@@ -200,28 +198,11 @@ export function useOrderedSections({
 		},
 		unstaged: {
 			id: "unstaged",
-			title: isJj ? "Changes" : "Unstaged",
+			title: "Unstaged",
 			count: unstagedFiles.length,
 			isExpanded: expandedSections.unstaged,
 			onToggle: () => toggleSection("unstaged"),
-			actions: isJj ? (
-				<div className="flex items-center gap-0.5">
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-								onClick={onShowDiscardUnstagedDialog}
-								disabled={isDiscardAllUnstagedPending}
-							>
-								<VscDiscard className="w-3.5 h-3.5" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent side="bottom">Discard all changes</TooltipContent>
-					</Tooltip>
-				</div>
-			) : (
+			actions: (
 				<div className="flex items-center gap-0.5">
 					<Tooltip>
 						<TooltipTrigger asChild>
@@ -260,8 +241,8 @@ export function useOrderedSections({
 					selectedFile={selectedFile}
 					selectedCommitHash={selectedCommitHash}
 					onFileSelect={onUnstagedFileSelect}
-					onStage={isJj ? undefined : onStageFile}
-					onStageFiles={isJj ? undefined : onStageFiles}
+					onStage={onStageFile}
+					onStageFiles={onStageFiles}
 					isActioning={isUnstagedActioning}
 					worktreePath={worktreePath}
 					projectId={projectId}
@@ -274,6 +255,5 @@ export function useOrderedSections({
 	};
 
 	return getOrderedChangeSectionIds(sectionOrder)
-		.filter((section) => !(isJj && section === "staged"))
 		.map((section) => sectionDefinitions[section]);
 }

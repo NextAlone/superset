@@ -36,49 +36,6 @@ export const createBranchesRouter = () => {
 				}> => {
 					assertRegisteredWorktree(input.worktreePath);
 
-					const provider = getVcsProvider(input.worktreePath);
-
-					if (provider.type === "jj") {
-						const [{ local: localNames, remote }, defaultBranch, currentBranch] =
-							await Promise.all([
-								provider.listBranches(input.worktreePath),
-								provider.getDefaultBranch(input.worktreePath),
-								provider.getCurrentBranch(input.worktreePath),
-							]);
-
-						const configuredCompareBaseBranch = currentBranch
-							? await provider.getBaseBranchConfig(input.worktreePath, currentBranch)
-							: null;
-
-						const persistedWorktree = localDb
-							.select({
-								branch: worktrees.branch,
-								baseBranch: worktrees.baseBranch,
-							})
-							.from(worktrees)
-							.where(eq(worktrees.path, input.worktreePath))
-							.get();
-						const persistedBaseBranch =
-							persistedWorktree &&
-							(!currentBranch || persistedWorktree.branch === currentBranch)
-								? (persistedWorktree.baseBranch?.trim() ?? null)
-								: null;
-
-						const local = localNames.map((branch) => ({
-							branch,
-							lastCommitDate: 0,
-						}));
-
-						return {
-							local,
-							remote: remote.sort(),
-							defaultBranch,
-							checkedOutBranches: {},
-							worktreeBaseBranch: configuredCompareBaseBranch ?? persistedBaseBranch,
-							currentBranch,
-						};
-					}
-
 					const git = await getSimpleGitWithShellPath(input.worktreePath);
 
 					const branchSummary = await git.branch(["-a"]);

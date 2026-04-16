@@ -3,7 +3,6 @@ import { z } from "zod";
 import { publicProcedure, router } from "../..";
 import { getCurrentBranch } from "../workspaces/utils/git";
 import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
-import { detectVcsType, getVcsProvider } from "../workspaces/utils/vcs";
 import {
 	isNoPullRequestFoundMessage,
 	isUpstreamMissingError,
@@ -64,19 +63,6 @@ export const createGitOperationsRouter = () => {
 				async ({ input }): Promise<{ success: boolean; hash: string }> => {
 					assertRegisteredWorktree(input.worktreePath);
 
-					if (detectVcsType(input.worktreePath) === "jj") {
-						if (!input.message.trim()) {
-							throw new TRPCError({
-								code: "BAD_REQUEST",
-								message: "Commit message is required",
-							});
-						}
-						const vcs = getVcsProvider(input.worktreePath);
-						const result = await vcs.commit(input.worktreePath, input.message);
-						clearStatusCacheForWorktree(input.worktreePath);
-						return { success: true, hash: result.hash };
-					}
-
 					const git = await getGitWithShellPath(input.worktreePath);
 					const result = await git.commit(input.message);
 					clearStatusCacheForWorktree(input.worktreePath);
@@ -93,13 +79,6 @@ export const createGitOperationsRouter = () => {
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
 				assertRegisteredWorktree(input.worktreePath);
-
-				if (detectVcsType(input.worktreePath) === "jj") {
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.push(input.worktreePath, { setUpstream: input.setUpstream });
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 
 				const git = await getGitWithShellPath(input.worktreePath);
 				const hasUpstream = await hasUpstreamBranch(git);
@@ -136,13 +115,6 @@ export const createGitOperationsRouter = () => {
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
 				assertRegisteredWorktree(input.worktreePath);
 
-				if (detectVcsType(input.worktreePath) === "jj") {
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.pull(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
-
 				const git = await getGitWithShellPath(input.worktreePath);
 				try {
 					await git.pull(["--rebase"]);
@@ -168,14 +140,6 @@ export const createGitOperationsRouter = () => {
 			)
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
 				assertRegisteredWorktree(input.worktreePath);
-
-				if (detectVcsType(input.worktreePath) === "jj") {
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.fetch(input.worktreePath);
-					await vcs.push(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 
 				const git = await getGitWithShellPath(input.worktreePath);
 				try {
@@ -218,13 +182,6 @@ export const createGitOperationsRouter = () => {
 			.input(z.object({ worktreePath: z.string() }))
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
 				assertRegisteredWorktree(input.worktreePath);
-
-				if (detectVcsType(input.worktreePath) === "jj") {
-					const vcs = getVcsProvider(input.worktreePath);
-					await vcs.fetch(input.worktreePath);
-					clearStatusCacheForWorktree(input.worktreePath);
-					return { success: true };
-				}
 
 				const git = await getGitWithShellPath(input.worktreePath);
 				await fetchCurrentBranch(git, input.worktreePath);

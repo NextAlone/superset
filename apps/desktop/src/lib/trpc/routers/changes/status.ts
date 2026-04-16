@@ -2,8 +2,6 @@ import { TRPCError } from "@trpc/server";
 import type { ChangedFile, GitChangesStatus } from "shared/changes-types";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
-import { detectVcsType } from "../workspaces/utils/vcs";
-import { computeJjStatus } from "./jj-status";
 import { assertRegisteredWorktree } from "./security/path-validation";
 import {
 	clearInFlightStatus,
@@ -39,29 +37,21 @@ export const createStatusRouter = () => {
 					return inFlight;
 				}
 
-				const vcsType = detectVcsType(input.worktreePath);
-
 				let statusPromise!: Promise<GitChangesStatus>;
 				statusPromise = (async (): Promise<GitChangesStatus> => {
 					try {
-						let result: GitChangesStatus;
-
-						if (vcsType === "jj") {
-							result = await computeJjStatus(input.worktreePath, defaultBranch);
-						} else {
-							result = await runGitTask(
-								"getStatus",
-								{
-									worktreePath: input.worktreePath,
-									defaultBranch,
-								},
-								{
-									dedupeKey: cacheKey,
-									strategy: "coalesce",
-									timeoutMs: 45_000,
-								},
-							);
-						}
+						const result = await runGitTask(
+							"getStatus",
+							{
+								worktreePath: input.worktreePath,
+								defaultBranch,
+							},
+							{
+								dedupeKey: cacheKey,
+								strategy: "coalesce",
+								timeoutMs: 45_000,
+							},
+						);
 
 						// Guard against stale in-flight completion after explicit invalidation.
 						if (getInFlightStatus(cacheKey) === statusPromise) {
