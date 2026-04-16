@@ -1,3 +1,4 @@
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { ConflictPane } from "./components/ConflictPane";
 import { DestroyConfirmPane } from "./components/DestroyConfirmPane";
 import { TeardownFailedPane } from "./components/TeardownFailedPane";
@@ -26,6 +27,12 @@ export function DashboardSidebarDeleteDialog({
 	onOpenChange,
 	onDeleted,
 }: DashboardSidebarDeleteDialogProps) {
+	const { data: workspace } = electronTrpc.workspaces.get.useQuery(
+		{ id: workspaceId },
+		{ enabled: open },
+	);
+	const isJj = workspace?.project?.vcsType === "jj";
+
 	const {
 		deleteBranch,
 		setDeleteBranch,
@@ -80,6 +87,7 @@ export function DashboardSidebarDeleteDialog({
 			deleteBranch={deleteBranch}
 			onDeleteBranchChange={setDeleteBranch}
 			onConfirm={() => run(false)}
+			isJj={isJj}
 		/>
 	);
 }

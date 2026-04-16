@@ -39,6 +39,11 @@ export function DeleteWorkspaceDialog({
 	onOpenChange,
 }: DeleteWorkspaceDialogProps) {
 	const isBranch = workspaceType === "branch";
+	const { data: workspace } = electronTrpc.workspaces.get.useQuery(
+		{ id: workspaceId },
+		{ enabled: open },
+	);
+	const isJj = workspace?.project?.vcsType === "jj";
 	const deleteWorkspace = useDeleteWorkspace();
 	const closeWorkspace = useCloseWorkspace();
 	const setDeleteLocalBranchSetting =
@@ -247,7 +252,7 @@ export function DeleteWorkspaceDialog({
 								<span className="text-destructive">{reason}</span>
 							) : (
 								<span className="block">
-									Deleting will permanently remove the worktree. You can hide
+									Deleting will permanently remove the {isJj ? "workspace" : "worktree"}. You can hide
 									instead to keep files on disk.
 								</span>
 							)}
@@ -281,7 +286,7 @@ export function DeleteWorkspaceDialog({
 								htmlFor="delete-local-branch"
 								className="text-xs text-muted-foreground cursor-pointer select-none"
 							>
-								Also delete local branch
+								{isJj ? "Also delete local bookmark" : "Also delete local branch"}
 							</Label>
 						</div>
 					</div>
@@ -318,7 +323,7 @@ export function DeleteWorkspaceDialog({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent side="top" className="text-xs max-w-[200px]">
-							Permanently delete workspace and git worktree from disk.
+							{isJj ? "Permanently delete workspace from disk." : "Permanently delete workspace and git worktree from disk."}
 						</TooltipContent>
 					</Tooltip>
 				</AlertDialogFooter>

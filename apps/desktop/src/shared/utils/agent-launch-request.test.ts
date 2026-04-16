@@ -104,8 +104,73 @@ describe("buildPromptAgentLaunchRequest", () => {
 		if (request?.kind !== "terminal") {
 			throw new Error("Expected terminal launch request");
 		}
-		expect(request.terminal.command).toStartWith("amp <<'SUPERSET_PROMPT_");
+		expect(request.terminal.command).toStartWith("amp < '.superset/prompt-");
 		expect(request.terminal.command).not.toContain("amp -x");
+		expect(request.terminal.command).not.toContain("<<'SUPERSET_PROMPT_");
+		expect(request.terminal.taskPromptContent).toBe("wasssup");
+		expect(request.terminal.taskPromptFileName).toMatch(/^prompt-.+\.md$/);
+	});
+
+	test("writes prompt to file for fish-compatible claude launches", () => {
+		const configsById = indexResolvedAgentConfigs(resolveAgentConfigs({}));
+		const request = buildPromptAgentLaunchRequest({
+			workspaceId: "workspace-1",
+			source: "new-workspace",
+			selectedAgent: "claude",
+			prompt: "hello fish",
+			configsById,
+		});
+
+		expect(request?.kind).toBe("terminal");
+		if (request?.kind !== "terminal") {
+			throw new Error("Expected terminal launch request");
+		}
+		// Fish does not support `<<` heredoc redirection; the file-based form
+		// `$(cat 'path')` works in bash, zsh, and fish alike.
+		expect(request.terminal.command).not.toContain("<<'SUPERSET_PROMPT_");
+		expect(request.terminal.command).toContain("$(cat '.superset/prompt-");
+		expect(request.terminal.taskPromptContent).toBe("hello fish");
+		expect(request.terminal.taskPromptFileName).toMatch(/^prompt-.+\.md$/);
+	});
+
+	test("uses task slug for prompt filename when provided", () => {
+		const configsById = indexResolvedAgentConfigs(resolveAgentConfigs({}));
+		const request = buildPromptAgentLaunchRequest({
+			workspaceId: "workspace-1",
+			source: "new-workspace",
+			selectedAgent: "claude",
+			prompt: "hello",
+			taskSlug: "demo-task",
+			configsById,
+		});
+
+		expect(request?.kind).toBe("terminal");
+		if (request?.kind !== "terminal") {
+			throw new Error("Expected terminal launch request");
+		}
+		expect(request.terminal.taskPromptFileName).toBe("prompt-demo-task.md");
+		expect(request.terminal.command).toContain(
+			"$(cat '.superset/prompt-demo-task.md')",
+		);
+	});
+
+	test("rejects unsafe task slug and falls back to uuid filename", () => {
+		const configsById = indexResolvedAgentConfigs(resolveAgentConfigs({}));
+		const request = buildPromptAgentLaunchRequest({
+			workspaceId: "workspace-1",
+			source: "new-workspace",
+			selectedAgent: "claude",
+			prompt: "hello",
+			taskSlug: "../evil",
+			configsById,
+		});
+
+		expect(request?.kind).toBe("terminal");
+		if (request?.kind !== "terminal") {
+			throw new Error("Expected terminal launch request");
+		}
+		expect(request.terminal.taskPromptFileName).not.toContain("..");
+		expect(request.terminal.taskPromptFileName).toMatch(/^prompt-.+\.md$/);
 	});
 });
 

@@ -18,6 +18,7 @@ interface DestroyConfirmPaneProps {
 	deleteBranch: boolean;
 	onDeleteBranchChange: (next: boolean) => void;
 	onConfirm: () => void;
+	isJj?: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export function DestroyConfirmPane({
 	deleteBranch,
 	onDeleteBranchChange,
 	onConfirm,
+	isJj,
 }: DestroyConfirmPaneProps) {
 	const checkboxId = useId();
 	return (
@@ -42,7 +44,7 @@ export function DestroyConfirmPane({
 						Delete workspace "{workspaceName}"?
 					</AlertDialogTitle>
 					<AlertDialogDescription>
-						This removes the worktree from disk. The cloud workspace record will
+						This removes the {isJj ? "workspace" : "worktree"} from disk. The cloud workspace record will
 						also be removed.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
@@ -59,7 +61,7 @@ export function DestroyConfirmPane({
 							htmlFor={checkboxId}
 							className="text-xs text-muted-foreground cursor-pointer select-none"
 						>
-							Also delete local branch
+							{isJj ? "Also delete local bookmark" : "Also delete local branch"}
 						</Label>
 					</div>
 				</div>
