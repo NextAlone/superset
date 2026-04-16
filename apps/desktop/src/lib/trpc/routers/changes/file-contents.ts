@@ -7,6 +7,7 @@ import { z } from "zod";
 import { publicProcedure, router } from "../..";
 import { toRegisteredWorktreeRelativePath } from "../workspace-fs-service";
 import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
+import { getProcessEnvWithShellPath } from "../workspaces/utils/shell-env";
 import { detectVcsType } from "../workspaces/utils/vcs";
 
 const execFileAsync = promisify(execFile);
@@ -207,10 +208,11 @@ async function jjFileShow(
 	rev: string,
 	filePath: string,
 ): Promise<string> {
+	const env = await getProcessEnvWithShellPath();
 	const { stdout } = await execFileAsync(
 		"jj",
 		["--no-pager", "--color=never", "-R", repoPath, "file", "show", "-r", rev, filePath],
-		{ timeout: 30_000 },
+		{ timeout: 30_000, env },
 	);
 	return stdout;
 }
