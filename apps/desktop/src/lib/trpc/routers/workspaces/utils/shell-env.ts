@@ -279,16 +279,34 @@ export async function execWithShellEnv(
 /**
  * Enriches the running process environment with missing values from the user's
  * interactive shell so later child processes inherit tokens and similar vars.
+ *
+ * PATH gets special treatment: macOS LaunchServices forcibly sets a default
+ * `/usr/bin:/bin:/usr/sbin:/sbin` for Finder/Dock-launched GUI apps and ignores
+ * LSEnvironment.PATH overrides (Catalina+ security policy). Without forcing the
+ * shell PATH, child spawns of git/jj/ssh from nix profiles silently fail, and
+ * callers like jjGetChangeStatus that swallow errors render "no changes detected".
  */
 export async function applyShellEnvToProcess(
 	targetEnv: NodeJS.ProcessEnv = process.env,
 	shellEnvResult?: Record<string, string>,
 ): Promise<void> {
-	const mergedEnv = await getProcessEnvWithShellEnv(targetEnv, shellEnvResult);
+	const resolvedShellEnv = shellEnvResult ?? (await getShellEnvironment());
+	const mergedEnv = await getProcessEnvWithShellEnv(
+		targetEnv,
+		resolvedShellEnv,
+	);
 
 	for (const [key, value] of Object.entries(mergedEnv)) {
 		if (typeof targetEnv[key] !== "string") {
 			targetEnv[key] = value;
+		}
+	}
+
+	const shellPath = resolvedShellEnv.PATH || resolvedShellEnv.Path;
+	if (shellPath) {
+		targetEnv.PATH = shellPath;
+		if (process.platform === "win32" || "Path" in targetEnv) {
+			targetEnv.Path = shellPath;
 		}
 	}
 }

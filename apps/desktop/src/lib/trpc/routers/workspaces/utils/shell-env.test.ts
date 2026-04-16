@@ -54,6 +54,21 @@ describe("shell env merging", () => {
 
 		expect(targetEnv).toEqual({});
 	});
+
+	test("applyShellEnvToProcess overrides PATH from shell env", async () => {
+		const targetEnv: NodeJS.ProcessEnv = {
+			PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+			NODE_ENV: "production",
+		};
+
+		await applyShellEnvToProcess(targetEnv, {
+			PATH: "/opt/homebrew/bin:/usr/bin:/bin",
+			NODE_ENV: "development",
+		});
+
+		expect(targetEnv.PATH).toBe("/opt/homebrew/bin:/usr/bin:/bin");
+		expect(targetEnv.NODE_ENV).toBe("production");
+	});
 });
 
 describe("shell env cache", () => {
