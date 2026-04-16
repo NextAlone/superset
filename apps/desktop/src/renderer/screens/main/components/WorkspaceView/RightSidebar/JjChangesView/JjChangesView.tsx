@@ -8,7 +8,7 @@ import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	VscCheck,
 	VscChevronRight,
@@ -21,6 +21,11 @@ import { useChangesStore } from "renderer/stores/changes";
 import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
 import { FileList } from "../ChangesView/components/FileList";
+import {
+	BookmarkPromptDialog,
+	type BookmarkPromptRequest,
+} from "./components/BookmarkPromptDialog";
+import { ConfirmDialog, type ConfirmRequest } from "./components/ConfirmDialog";
 import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
 import { RevisionRow } from "./components/RevisionRow";
 
@@ -129,6 +134,56 @@ export function JjChangesView({
 		onError: (err) => toast.error(`Edit failed: ${err.message}`),
 	});
 
+	// ---- Bookmark state + mutations ---------------------------------------
+	const [bookmarkPrompt, setBookmarkPrompt] =
+		useState<BookmarkPromptRequest | null>(null);
+	const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{
+		changeId?: string;
+		oldName?: string;
+	}>({});
+
+	const bookmarkCreateMutation =
+		electronTrpc.changes.jjBookmarkCreate.useMutation({
+			onSuccess: () => {
+				toast.success("Bookmark created");
+				setBookmarkPrompt(null);
+				refetch();
+			},
+			onError: (err) => toast.error(`Create failed: ${err.message}`),
+		});
+
+	const bookmarkRenameMutation =
+		electronTrpc.changes.jjBookmarkRename.useMutation({
+			onSuccess: () => {
+				toast.success("Bookmark renamed");
+				setBookmarkPrompt(null);
+				refetch();
+			},
+			onError: (err) => toast.error(`Rename failed: ${err.message}`),
+		});
+
+	const bookmarkDeleteMutation =
+		electronTrpc.changes.jjBookmarkDelete.useMutation({
+			onSuccess: () => {
+				toast.success("Bookmark deleted");
+				refetch();
+			},
+			onError: (err) => toast.error(`Delete failed: ${err.message}`),
+		});
+
+	const bookmarkMoveMutation = electronTrpc.changes.jjBookmarkMove.useMutation({
+		onSuccess: () => {
+			toast.success("Bookmark moved");
+			refetch();
+		},
+		onError: (err) => toast.error(`Move failed: ${err.message}`),
+	});
+
+	// ---- Confirm dialog state ---------------------------------------------
+	const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(
+		null,
+	);
+
 	// ---- Sync description from server → local state -----------------------
 	useEffect(() => {
 		if (changeStatus && changeStatus.description !== lastSyncedDesc.current) {
@@ -184,6 +239,92 @@ export function JjChangesView({
 			editMutation.mutate({ worktreePath, changeId });
 		},
 		[worktreePath, editMutation],
+	);
+
+	// ---- Bookmark handlers -------------------------------------------------
+	const allBookmarks = useMemo(() => {
+		if (!changeStatus) return [] as string[];
+		const set = new Set<string>();
+		if (changeStatus.bookmark) set.add(changeStatus.bookmark);
+		for (const r of changeStatus.ancestors) {
+			for (const b of r.bookmarks) set.add(b);
+		}
+		return [...set].sort();
+	}, [changeStatus]);
+
+	const openCreateBookmarkPrompt = useCallback(
+		(changeId: string) => {
+			setPendingBookmarkTarget({ changeId });
+			setBookmarkPrompt({
+				mode: "create",
+				disallowed: allBookmarks,
+				context: changeId,
+			});
+		},
+		[allBookmarks],
+	);
+
+	const openRenameBookmarkPrompt = useCallback(
+		(name: string) => {
+			setPendingBookmarkTarget({ oldName: name });
+			setBookmarkPrompt({
+				mode: "rename",
+				initialValue: name,
+				disallowed: allBookmarks,
+			});
+		},
+		[allBookmarks],
+	);
+
+	const handleBookmarkPromptSubmit = useCallback(
+		(name: string) => {
+			if (!worktreePath) return;
+			if (pendingBookmarkTarget.changeId) {
+				bookmarkCreateMutation.mutate({
+					worktreePath,
+					name,
+					revision: pendingBookmarkTarget.changeId,
+				});
+			} else if (pendingBookmarkTarget.oldName) {
+				bookmarkRenameMutation.mutate({
+					worktreePath,
+					oldName: pendingBookmarkTarget.oldName,
+					newName: name,
+				});
+			}
+		},
+		[
+			worktreePath,
+			pendingBookmarkTarget,
+			bookmarkCreateMutation,
+			bookmarkRenameMutation,
+		],
+	);
+
+	const handleBookmarkDelete = useCallback(
+		(name: string) => {
+			if (!worktreePath) return;
+			setConfirmRequest({
+				title: `Delete bookmark "${name}"?`,
+				description:
+					"Forgets the local bookmark. A pushed copy on the remote will remain until deleted there.",
+				confirmLabel: "Delete",
+				destructive: true,
+				onConfirm: () => {
+					bookmarkDeleteMutation.mutate({ worktreePath, name });
+					setConfirmRequest(null);
+				},
+			});
+		},
+		[worktreePath, bookmarkDeleteMutation],
+	);
+
+	const handleBookmarkMove = useCallback(
+		(name: string, changeId: string) => {
+			if (!worktreePath) return;
+			bookmarkMoveMutation.mutate({ worktreePath, name, revision: changeId });
+		},
+		[worktreePath, bookmarkMoveMutation],
 	);
 
 	const handleFileSelect = useCallback(
@@ -485,7 +626,12 @@ export function JjChangesView({
 											revision={rev}
 											isCurrent={rev.changeId === changeStatus.changeId}
 											isEditPending={editMutation.isPending}
+											availableBookmarks={allBookmarks}
 											onEdit={handleEdit}
+											onBookmarkCreate={openCreateBookmarkPrompt}
+											onBookmarkMove={handleBookmarkMove}
+											onBookmarkRename={openRenameBookmarkPrompt}
+											onBookmarkDelete={handleBookmarkDelete}
 										/>
 									))}
 								</div>
@@ -494,6 +640,21 @@ export function JjChangesView({
 					)}
 				</div>
 			)}
+			<BookmarkPromptDialog
+				request={bookmarkPrompt}
+				onCancel={() => setBookmarkPrompt(null)}
+				onSubmit={handleBookmarkPromptSubmit}
+				isPending={
+					bookmarkCreateMutation.isPending || bookmarkRenameMutation.isPending
+				}
+			/>
+			<ConfirmDialog
+				request={confirmRequest}
+				onCancel={() => setConfirmRequest(null)}
+				isPending={
+					bookmarkDeleteMutation.isPending || bookmarkMoveMutation.isPending
+				}
+			/>
 		</div>
 	);
 }
