@@ -3,6 +3,7 @@ import { createBranchesRouter } from "./branches";
 import { createFileContentsRouter } from "./file-contents";
 import { createGitOperationsRouter } from "./git-operations";
 import { createJjRouter } from "./jj-change-status";
+import { createJjMutationsRouter } from "./jj-mutations";
 import { createStagingRouter } from "./staging";
 import { createStatusRouter } from "./status";
 
@@ -13,6 +14,7 @@ export const createChangesRouter = () => {
 	const stagingRouter = createStagingRouter();
 	const gitOperationsRouter = createGitOperationsRouter();
 	const jjRouter = createJjRouter();
+	const jjMutationsRouter = createJjMutationsRouter();
 
 	return router({
 		// Branch operations
@@ -30,7 +32,10 @@ export const createChangesRouter = () => {
 		// Git operations (commit, push, pull, sync, createPR)
 		...gitOperationsRouter._def.procedures,
 
-		// Jj-native change operations
+		// Jj-native read-only queries
 		...jjRouter._def.procedures,
+
+		// Jj-native mutations (describe, commit, squash, edit, rebase, bookmarks)
+		...jjMutationsRouter._def.procedures,
 	});
 };

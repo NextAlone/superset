@@ -12,7 +12,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	VscCheck,
 	VscChevronRight,
-	VscCircleFilled,
 	VscDiscard,
 	VscRefresh,
 	VscWarning,
@@ -23,6 +22,7 @@ import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
 import { FileList } from "../ChangesView/components/FileList";
 import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
+import { RevisionRow } from "./components/RevisionRow";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,8 +113,7 @@ export function JjChangesView({
 
 	const discardFileMutation = electronTrpc.changes.jjDiscardFile.useMutation({
 		onSuccess: () => refetch(),
-		onError: (err) =>
-			toast.error(`Discard file failed: ${err.message}`),
+		onError: (err) => toast.error(`Discard file failed: ${err.message}`),
 	});
 
 	const discardAllMutation = electronTrpc.changes.jjDiscardAll.useMutation({
@@ -123,6 +122,11 @@ export function JjChangesView({
 			refetch();
 		},
 		onError: (err) => toast.error(`Discard all failed: ${err.message}`),
+	});
+
+	const editMutation = electronTrpc.changes.jjEdit.useMutation({
+		onSuccess: () => refetch(),
+		onError: (err) => toast.error(`Edit failed: ${err.message}`),
 	});
 
 	// ---- Sync description from server → local state -----------------------
@@ -155,7 +159,10 @@ export function JjChangesView({
 
 	const handleSquash = useCallback(() => {
 		if (!worktreePath) return;
-		squashMutation.mutate({ worktreePath, message: description.trim() || undefined });
+		squashMutation.mutate({
+			worktreePath,
+			message: description.trim() || undefined,
+		});
 	}, [worktreePath, description, squashMutation]);
 
 	const handleDiscard = useCallback(
@@ -170,6 +177,14 @@ export function JjChangesView({
 		if (!worktreePath) return;
 		discardAllMutation.mutate({ worktreePath });
 	}, [worktreePath, discardAllMutation]);
+
+	const handleEdit = useCallback(
+		(changeId: string) => {
+			if (!worktreePath) return;
+			editMutation.mutate({ worktreePath, changeId });
+		},
+		[worktreePath, editMutation],
+	);
 
 	const handleFileSelect = useCallback(
 		(file: ChangedFile, category: ChangeCategory) => {
@@ -220,7 +235,8 @@ export function JjChangesView({
 	const filesCount = changeStatus.files.length;
 	const againstBaseCount = changeStatus.againstBase.length;
 	const ancestorsCount = changeStatus.ancestors.length;
-	const hasChanges = filesCount > 0 || againstBaseCount > 0 || ancestorsCount > 0;
+	const hasChanges =
+		filesCount > 0 || againstBaseCount > 0 || ancestorsCount > 0;
 
 	// ---- Render ------------------------------------------------------------
 	return (
@@ -257,9 +273,7 @@ export function JjChangesView({
 								<VscWarning className="size-3.5 text-yellow-500" />
 							</span>
 						</TooltipTrigger>
-						<TooltipContent side="bottom">
-							Change has conflicts
-						</TooltipContent>
+						<TooltipContent side="bottom">Change has conflicts</TooltipContent>
 					</Tooltip>
 				)}
 
@@ -349,9 +363,7 @@ export function JjChangesView({
 											sections.changes && "rotate-90",
 										)}
 									/>
-									<span className="text-xs font-medium truncate">
-										Changes
-									</span>
+									<span className="text-xs font-medium truncate">Changes</span>
 									<span className="text-[10px] text-muted-foreground shrink-0">
 										{filesCount}
 									</span>
@@ -381,9 +393,7 @@ export function JjChangesView({
 									viewMode={fileListViewMode}
 									selectedFile={selectedFile}
 									selectedCommitHash={selectedCommitHash}
-									onFileSelect={(file) =>
-										handleFileSelect(file, "unstaged")
-									}
+									onFileSelect={(file) => handleFileSelect(file, "unstaged")}
 									onDiscard={handleDiscard}
 									worktreePath={worktreePath}
 									category="unstaged"
@@ -462,9 +472,7 @@ export function JjChangesView({
 										sections.history && "rotate-90",
 									)}
 								/>
-								<span className="text-xs font-medium truncate">
-									History
-								</span>
+								<span className="text-xs font-medium truncate">History</span>
 								<span className="text-[10px] text-muted-foreground shrink-0">
 									{ancestorsCount}
 								</span>
@@ -472,30 +480,13 @@ export function JjChangesView({
 							<CollapsibleContent className="px-0.5 pb-1 min-w-0 overflow-hidden">
 								<div className="space-y-0.5">
 									{changeStatus.ancestors.map((rev) => (
-										<div
+										<RevisionRow
 											key={rev.commitId}
-											className="flex items-start gap-1.5 px-1.5 py-1 text-xs rounded-sm hover:bg-accent/30"
-										>
-											<VscCircleFilled
-												className={cn(
-													"size-2.5 mt-0.5 shrink-0",
-													rev.isEmpty
-														? "text-muted-foreground/40"
-														: "text-muted-foreground",
-												)}
-											/>
-											<span className="font-mono text-muted-foreground shrink-0">
-												{rev.changeId}
-											</span>
-											<span className="truncate">
-												{rev.description || "(no description)"}
-											</span>
-											{rev.bookmarks.length > 0 && (
-												<span className="text-[10px] px-1 rounded bg-accent text-accent-foreground font-mono shrink-0">
-													{rev.bookmarks[0]}
-												</span>
-											)}
-										</div>
+											revision={rev}
+											isCurrent={rev.changeId === changeStatus.changeId}
+											isEditPending={editMutation.isPending}
+											onEdit={handleEdit}
+										/>
 									))}
 								</div>
 							</CollapsibleContent>

@@ -8,7 +8,6 @@ import {
 } from "./jj-status";
 import { assertRegisteredWorktree } from "./security/path-validation";
 import { jj } from "./utils/jj-cli";
-import { clearStatusCacheForWorktree } from "./utils/status-cache";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -252,126 +251,6 @@ export function createJjRouter() {
 					ancestors,
 					hasConflicts: conflictRaw.trim() === "true",
 				};
-			}),
-
-		// ---------------------------------------------------------------
-		// describe — update description of current change
-		// ---------------------------------------------------------------
-		jjDescribe: publicProcedure
-			.input(
-				z.object({
-					worktreePath: z.string(),
-					message: z.string(),
-				}),
-			)
-			.mutation(async ({ input }) => {
-				assertRegisteredWorktree(input.worktreePath);
-				const repoRoot =
-					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
-
-				await jj(repoRoot, ["describe", "-m", input.message]);
-				clearStatusCacheForWorktree(input.worktreePath);
-
-				return { success: true as const };
-			}),
-
-		// ---------------------------------------------------------------
-		// commit — commit current change and create new empty change
-		// ---------------------------------------------------------------
-		jjCommit: publicProcedure
-			.input(
-				z.object({
-					worktreePath: z.string(),
-					message: z.string().min(1, "Commit message must be non-empty"),
-				}),
-			)
-			.mutation(async ({ input }) => {
-				assertRegisteredWorktree(input.worktreePath);
-				const repoRoot =
-					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
-
-				await jj(repoRoot, ["commit", "-m", input.message]);
-
-				// Get committed change hash (now at @-)
-				const hash = await jj(repoRoot, [
-					"log",
-					"-r",
-					"@-",
-					"--no-graph",
-					"-T",
-					"commit_id",
-				]);
-
-				clearStatusCacheForWorktree(input.worktreePath);
-
-				return { success: true as const, hash };
-			}),
-
-		// ---------------------------------------------------------------
-		// squash — squash current change into parent
-		// ---------------------------------------------------------------
-		jjSquash: publicProcedure
-			.input(
-				z.object({
-					worktreePath: z.string(),
-					message: z.string().optional(),
-				}),
-			)
-			.mutation(async ({ input }) => {
-				assertRegisteredWorktree(input.worktreePath);
-				const repoRoot =
-					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
-
-				// Always pass -m to avoid interactive editor hang
-				const msg = input.message ?? "";
-				await jj(repoRoot, ["squash", "-m", msg]);
-
-				clearStatusCacheForWorktree(input.worktreePath);
-
-				return { success: true as const };
-			}),
-
-		// ---------------------------------------------------------------
-		// discardFile — restore a single file to parent version
-		// ---------------------------------------------------------------
-		jjDiscardFile: publicProcedure
-			.input(
-				z.object({
-					worktreePath: z.string(),
-					filePath: z.string(),
-				}),
-			)
-			.mutation(async ({ input }) => {
-				assertRegisteredWorktree(input.worktreePath);
-				const repoRoot =
-					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
-
-				await jj(repoRoot, ["restore", input.filePath]);
-
-				clearStatusCacheForWorktree(input.worktreePath);
-
-				return { success: true as const };
-			}),
-
-		// ---------------------------------------------------------------
-		// discardAll — restore all files to parent version
-		// ---------------------------------------------------------------
-		jjDiscardAll: publicProcedure
-			.input(
-				z.object({
-					worktreePath: z.string(),
-				}),
-			)
-			.mutation(async ({ input }) => {
-				assertRegisteredWorktree(input.worktreePath);
-				const repoRoot =
-					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
-
-				await jj(repoRoot, ["restore"]);
-
-				clearStatusCacheForWorktree(input.worktreePath);
-
-				return { success: true as const };
 			}),
 	});
 }
