@@ -100,6 +100,11 @@ const COMMON_MACOS_PATHS = [
 	"/opt/homebrew/sbin",
 	"/usr/local/bin",
 	"/usr/local/sbin",
+	// Nix paths (nix-darwin, home-manager, NixOS)
+	"/run/current-system/sw/bin",
+	`/etc/profiles/per-user/${process.env.USER ?? ""}/bin`,
+	"/nix/var/nix/profiles/default/bin",
+	`${process.env.HOME ?? ""}/.nix-profile/bin`,
 ];
 
 /**
