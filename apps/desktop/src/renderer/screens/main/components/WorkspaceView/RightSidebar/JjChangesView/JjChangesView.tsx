@@ -179,6 +179,23 @@ export function JjChangesView({
 		onError: (err) => toast.error(`Move failed: ${err.message}`),
 	});
 
+	// ---- History-rewriting mutations --------------------------------------
+	const squashIntoMutation = electronTrpc.changes.jjSquashInto.useMutation({
+		onSuccess: () => {
+			toast.success("Squashed into target");
+			refetch();
+		},
+		onError: (err) => toast.error(`Squash failed: ${err.message}`),
+	});
+
+	const rebaseMutation = electronTrpc.changes.jjRebase.useMutation({
+		onSuccess: () => {
+			toast.success("Rebased");
+			refetch();
+		},
+		onError: (err) => toast.error(`Rebase failed: ${err.message}`),
+	});
+
 	// ---- Confirm dialog state ---------------------------------------------
 	const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(
 		null,
@@ -325,6 +342,61 @@ export function JjChangesView({
 			bookmarkMoveMutation.mutate({ worktreePath, name, revision: changeId });
 		},
 		[worktreePath, bookmarkMoveMutation],
+	);
+
+	const handleSquashInto = useCallback(
+		(changeId: string) => {
+			if (!worktreePath || !changeStatus) return;
+			const currentDesc = description.trim();
+			setConfirmRequest({
+				title: "Squash @ into this change?",
+				description: (
+					<>
+						Current change{" "}
+						<span className="font-mono text-foreground">
+							{changeStatus.changeId}
+						</span>{" "}
+						will be merged into{" "}
+						<span className="font-mono text-foreground">{changeId}</span>. This
+						rewrites history.
+					</>
+				),
+				confirmLabel: "Squash",
+				destructive: true,
+				onConfirm: () => {
+					squashIntoMutation.mutate({
+						worktreePath,
+						targetChangeId: changeId,
+						message: currentDesc || undefined,
+					});
+					setConfirmRequest(null);
+				},
+			});
+		},
+		[worktreePath, changeStatus, description, squashIntoMutation],
+	);
+
+	const handleRebaseOnto = useCallback(
+		(changeId: string) => {
+			if (!worktreePath) return;
+			setConfirmRequest({
+				title: "Rebase onto this change?",
+				description: (
+					<>
+						The current branch (from @) will be rebased onto{" "}
+						<span className="font-mono text-foreground">{changeId}</span>. This
+						rewrites history.
+					</>
+				),
+				confirmLabel: "Rebase",
+				destructive: true,
+				onConfirm: () => {
+					rebaseMutation.mutate({ worktreePath, destination: changeId });
+					setConfirmRequest(null);
+				},
+			});
+		},
+		[worktreePath, rebaseMutation],
 	);
 
 	const handleFileSelect = useCallback(
@@ -628,6 +700,8 @@ export function JjChangesView({
 											isEditPending={editMutation.isPending}
 											availableBookmarks={allBookmarks}
 											onEdit={handleEdit}
+											onSquashInto={handleSquashInto}
+											onRebaseOnto={handleRebaseOnto}
 											onBookmarkCreate={openCreateBookmarkPrompt}
 											onBookmarkMove={handleBookmarkMove}
 											onBookmarkRename={openRenameBookmarkPrompt}
@@ -652,7 +726,10 @@ export function JjChangesView({
 				request={confirmRequest}
 				onCancel={() => setConfirmRequest(null)}
 				isPending={
-					bookmarkDeleteMutation.isPending || bookmarkMoveMutation.isPending
+					bookmarkDeleteMutation.isPending ||
+					bookmarkMoveMutation.isPending ||
+					squashIntoMutation.isPending ||
+					rebaseMutation.isPending
 				}
 			/>
 		</div>
