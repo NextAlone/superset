@@ -28,7 +28,7 @@ import {
 import { ConfirmDialog, type ConfirmRequest } from "./components/ConfirmDialog";
 import { ConflictEditor } from "./components/ConflictEditor";
 import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
-import { RevisionRow } from "./components/RevisionRow";
+import { RevisionDag } from "./components/RevisionDag";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -213,6 +213,12 @@ export function JjChangesView({
 	);
 	const conflictCount = conflictListQuery.data?.length ?? 0;
 
+	// ---- DAG query ---------------------------------------------------------
+	const dagQuery = electronTrpc.changes.jjGetDag.useQuery(
+		{ worktreePath: worktreePath ?? "", baseBookmark },
+		{ enabled: !!worktreePath, refetchInterval: 2500 },
+	);
+
 	// ---- Sync description from server → local state -----------------------
 	useEffect(() => {
 		if (changeStatus && changeStatus.description !== lastSyncedDesc.current) {
@@ -272,14 +278,16 @@ export function JjChangesView({
 
 	// ---- Bookmark handlers -------------------------------------------------
 	const allBookmarks = useMemo(() => {
-		if (!changeStatus) return [] as string[];
 		const set = new Set<string>();
-		if (changeStatus.bookmark) set.add(changeStatus.bookmark);
-		for (const r of changeStatus.ancestors) {
+		if (changeStatus?.bookmark) set.add(changeStatus.bookmark);
+		for (const r of changeStatus?.ancestors ?? []) {
 			for (const b of r.bookmarks) set.add(b);
 		}
+		for (const n of dagQuery.data?.nodes ?? []) {
+			for (const b of n.bookmarks) set.add(b);
+		}
 		return [...set].sort();
-	}, [changeStatus]);
+	}, [changeStatus, dagQuery.data]);
 
 	const openCreateBookmarkPrompt = useCallback(
 		(changeId: string) => {
@@ -459,9 +467,9 @@ export function JjChangesView({
 
 	const filesCount = changeStatus.files.length;
 	const againstBaseCount = changeStatus.againstBase.length;
-	const ancestorsCount = changeStatus.ancestors.length;
+	const dagNodesCount = dagQuery.data?.nodes.length ?? 0;
 	const hasChanges =
-		filesCount > 0 || againstBaseCount > 0 || ancestorsCount > 0;
+		filesCount > 0 || againstBaseCount > 0 || dagNodesCount > 0;
 
 	// ---- Render ------------------------------------------------------------
 	return (
@@ -698,8 +706,8 @@ export function JjChangesView({
 						</Collapsible>
 					)}
 
-					{/* History (ancestors) */}
-					{ancestorsCount > 0 && (
+					{/* Revision Graph (DAG) */}
+					{dagNodesCount > 0 && (
 						<Collapsible
 							open={sections.history}
 							onOpenChange={() => toggleSection("history")}
@@ -717,30 +725,27 @@ export function JjChangesView({
 										sections.history && "rotate-90",
 									)}
 								/>
-								<span className="text-xs font-medium truncate">History</span>
+								<span className="text-xs font-medium truncate">
+									Revision Graph
+								</span>
 								<span className="text-[10px] text-muted-foreground shrink-0">
-									{ancestorsCount}
+									{dagNodesCount}
 								</span>
 							</CollapsibleTrigger>
 							<CollapsibleContent className="px-0.5 pb-1 min-w-0 overflow-hidden">
-								<div className="space-y-0.5">
-									{changeStatus.ancestors.map((rev) => (
-										<RevisionRow
-											key={rev.commitId}
-											revision={rev}
-											isCurrent={rev.changeId === changeStatus.changeId}
-											isEditPending={editMutation.isPending}
-											availableBookmarks={allBookmarks}
-											onEdit={handleEdit}
-											onSquashInto={handleSquashInto}
-											onRebaseOnto={handleRebaseOnto}
-											onBookmarkCreate={openCreateBookmarkPrompt}
-											onBookmarkMove={handleBookmarkMove}
-											onBookmarkRename={openRenameBookmarkPrompt}
-											onBookmarkDelete={handleBookmarkDelete}
-										/>
-									))}
-								</div>
+								<RevisionDag
+									nodes={dagQuery.data?.nodes ?? []}
+									truncated={dagQuery.data?.truncated ?? false}
+									isEditPending={editMutation.isPending}
+									availableBookmarks={allBookmarks}
+									onEdit={handleEdit}
+									onSquashInto={handleSquashInto}
+									onRebaseOnto={handleRebaseOnto}
+									onBookmarkCreate={openCreateBookmarkPrompt}
+									onBookmarkMove={handleBookmarkMove}
+									onBookmarkRename={openRenameBookmarkPrompt}
+									onBookmarkDelete={handleBookmarkDelete}
+								/>
 							</CollapsibleContent>
 						</Collapsible>
 					)}
