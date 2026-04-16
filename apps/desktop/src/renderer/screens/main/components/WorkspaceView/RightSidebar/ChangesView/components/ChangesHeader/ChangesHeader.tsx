@@ -48,7 +48,7 @@ interface ChangesHeaderProps {
 	isJj?: boolean;
 }
 
-function BaseBranchSelector({ worktreePath }: { worktreePath: string }) {
+function BaseBranchSelector({ worktreePath, isJj }: { worktreePath: string; isJj?: boolean }) {
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
 	const utils = electronTrpc.useUtils();
@@ -113,18 +113,18 @@ function BaseBranchSelector({ worktreePath }: { worktreePath: string }) {
 					</PopoverTrigger>
 				</TooltipTrigger>
 				<TooltipContent side="top" showArrow={false}>
-					Change base branch
+					{isJj ? "Change base bookmark" : "Change base branch"}
 				</TooltipContent>
 			</Tooltip>
 			<PopoverContent align="start" className="w-56 p-0">
 				<Command shouldFilter={false}>
 					<CommandInput
-						placeholder="Search branches..."
+						placeholder={isJj ? "Search bookmarks..." : "Search branches..."}
 						value={search}
 						onValueChange={setSearch}
 					/>
 					<CommandList className="max-h-[200px]">
-						<CommandEmpty>No branches found</CommandEmpty>
+						<CommandEmpty>{isJj ? "No bookmarks found" : "No branches found"}</CommandEmpty>
 						{filteredBranches.map((branch) => (
 							<CommandItem
 								key={branch}
@@ -258,7 +258,7 @@ export function ChangesHeader({
 }: ChangesHeaderProps) {
 	return (
 		<div className="flex items-center gap-0.5 px-2 py-1.5">
-			<BaseBranchSelector worktreePath={worktreePath} />
+			<BaseBranchSelector worktreePath={worktreePath} isJj={isJj} />
 			{!isJj && (
 				<StashDropdown
 					onStash={onStash}

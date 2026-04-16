@@ -65,6 +65,12 @@ export const createGitOperationsRouter = () => {
 					assertRegisteredWorktree(input.worktreePath);
 
 					if (detectVcsType(input.worktreePath) === "jj") {
+						if (!input.message.trim()) {
+							throw new TRPCError({
+								code: "BAD_REQUEST",
+								message: "Commit message is required",
+							});
+						}
 						const vcs = getVcsProvider(input.worktreePath);
 						const result = await vcs.commit(input.worktreePath, input.message);
 						clearStatusCacheForWorktree(input.worktreePath);
