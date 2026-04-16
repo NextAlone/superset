@@ -45,6 +45,7 @@ interface ChangesHeaderProps {
 	onStashIncludeUntracked: () => void;
 	onStashPop: () => void;
 	isStashPending: boolean;
+	isJj?: boolean;
 }
 
 function BaseBranchSelector({ worktreePath }: { worktreePath: string }) {
@@ -253,16 +254,19 @@ export function ChangesHeader({
 	onStashIncludeUntracked,
 	onStashPop,
 	isStashPending,
+	isJj,
 }: ChangesHeaderProps) {
 	return (
 		<div className="flex items-center gap-0.5 px-2 py-1.5">
 			<BaseBranchSelector worktreePath={worktreePath} />
-			<StashDropdown
-				onStash={onStash}
-				onStashIncludeUntracked={onStashIncludeUntracked}
-				onStashPop={onStashPop}
-				isPending={isStashPending}
-			/>
+			{!isJj && (
+				<StashDropdown
+					onStash={onStash}
+					onStashIncludeUntracked={onStashIncludeUntracked}
+					onStashPop={onStashPop}
+					isPending={isStashPending}
+				/>
+			)}
 			{showViewModeToggle && (
 				<ViewModeToggle
 					viewMode={viewMode}

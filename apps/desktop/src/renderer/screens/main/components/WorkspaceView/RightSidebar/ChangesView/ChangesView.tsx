@@ -90,6 +90,7 @@ export function ChangesView({
 	);
 	const worktreePath = workspace?.worktreePath;
 	const projectId = workspace?.projectId;
+	const isJj = workspace?.project?.vcsType === "jj";
 	const activeTab = useChangesStore((s) => s.activeTab);
 	const githubStatusQueryPolicy = getGitHubStatusQueryPolicy(
 		"changes-sidebar",
@@ -589,6 +590,7 @@ export function ChangesView({
 		worktreePath: worktreePath ?? "",
 		projectId,
 		isExpandedView,
+		isJj,
 		againstBaseFiles,
 		onAgainstBaseFileSelect: (file) => handleFileSelect(file, "against-base"),
 		commitsWithFiles,
@@ -765,12 +767,13 @@ export function ChangesView({
 								stashIncludeUntrackedMutation.isPending ||
 								stashPopMutation.isPending
 							}
+							isJj={isJj}
 						/>
 					</div>
 					<div className="border-b border-border">
 						<CommitInput
 							worktreePath={worktreePath}
-							hasStagedChanges={hasStagedChanges}
+							hasStagedChanges={isJj || hasStagedChanges}
 							pushCount={status.pushCount}
 							pullCount={status.pullCount}
 							hasUpstream={status.hasUpstream}

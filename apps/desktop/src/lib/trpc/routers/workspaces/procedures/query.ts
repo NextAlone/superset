@@ -73,6 +73,7 @@ export const createQueryProcedures = () => {
 								mainRepoPath: project.mainRepoPath,
 								githubOwner: project.githubOwner ?? null,
 								defaultBranch: project.defaultBranch ?? null,
+								vcsType: project.vcsType ?? null,
 							}
 						: null,
 					worktree: worktree
