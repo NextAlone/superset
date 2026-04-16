@@ -2,6 +2,7 @@ import { router } from "../..";
 import { createBranchesRouter } from "./branches";
 import { createFileContentsRouter } from "./file-contents";
 import { createGitOperationsRouter } from "./git-operations";
+import { createJjRouter } from "./jj-change-status";
 import { createStagingRouter } from "./staging";
 import { createStatusRouter } from "./status";
 
@@ -11,6 +12,7 @@ export const createChangesRouter = () => {
 	const fileContentsRouter = createFileContentsRouter();
 	const stagingRouter = createStagingRouter();
 	const gitOperationsRouter = createGitOperationsRouter();
+	const jjRouter = createJjRouter();
 
 	return router({
 		// Branch operations
@@ -27,5 +29,8 @@ export const createChangesRouter = () => {
 
 		// Git operations (commit, push, pull, sync, createPR)
 		...gitOperationsRouter._def.procedures,
+
+		// Jj-native change operations
+		...jjRouter._def.procedures,
 	});
 };
