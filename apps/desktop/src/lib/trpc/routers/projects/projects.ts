@@ -184,13 +184,27 @@ async function ensureMainWorkspace(project: Project): Promise<void> {
 	const existingBranchWorkspace = getBranchWorkspace(project.id);
 
 	if (existingBranchWorkspace) {
+		// For jj repos, refresh the branch to reflect current @ on every open
+		const vcs = getVcsProvider(project.mainRepoPath);
+		if (vcs.type === "jj") {
+			const currentBranch = await vcs.getCurrentBranch(project.mainRepoPath);
+			if (currentBranch && currentBranch !== existingBranchWorkspace.branch) {
+				localDb
+					.update(workspaces)
+					.set({ branch: currentBranch })
+					.where(eq(workspaces.id, existingBranchWorkspace.id))
+					.run();
+			}
+		}
 		touchWorkspace(existingBranchWorkspace.id);
 		setLastActiveWorkspace(existingBranchWorkspace.id);
 		return;
 	}
 
 	const vcsMain = getVcsProvider(project.mainRepoPath);
-	const branch = await vcsMain.getCurrentBranch(project.mainRepoPath);
+	const branch =
+		(await vcsMain.getCurrentBranch(project.mainRepoPath)) ||
+		(await vcsMain.getDefaultBranch(project.mainRepoPath));
 	if (!branch) {
 		console.warn(
 			`[ensureMainWorkspace] Could not determine current branch for project ${project.id}`,
