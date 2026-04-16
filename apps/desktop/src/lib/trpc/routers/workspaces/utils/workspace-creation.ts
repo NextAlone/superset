@@ -12,7 +12,7 @@ import {
 	touchWorkspace,
 	updateActiveWorkspaceIfRemoved,
 } from "./db-helpers";
-import { listExternalWorktrees, worktreeExists } from "./git";
+import { getVcsProvider } from "./vcs";
 import { resolveWorktreePath } from "./resolve-worktree-path";
 import { copySupersetConfigToWorktree, loadSetupConfig } from "./setup";
 
@@ -109,8 +109,9 @@ export async function createWorkspaceFromExternalWorktree({
 		throw new Error(`Project ${projectId} not found`);
 	}
 
-	// Check for external worktree (exists on disk but not tracked in DB)
-	const externalWorktrees = await listExternalWorktrees(project.mainRepoPath);
+	// Check for external worktree/workspace (exists on disk but not tracked in DB)
+	const vcsForList = getVcsProvider(project.mainRepoPath);
+	const externalWorktrees = await vcsForList.listExternalWorkspaces(project.mainRepoPath);
 
 	// Filter candidates: exclude main repo, bare, and detached
 	const candidates = externalWorktrees.filter(
@@ -289,9 +290,10 @@ export async function openExternalWorktree({
 		throw new Error(`Project ${projectId} not found`);
 	}
 
-	const exists = await worktreeExists(project.mainRepoPath, worktreePath);
+	const vcs = getVcsProvider(project.mainRepoPath);
+	const exists = await vcs.workspaceExists(project.mainRepoPath, worktreePath);
 	if (!exists) {
-		throw new Error("Worktree no longer exists on disk");
+		throw new Error("Workspace no longer exists on disk");
 	}
 
 	const existingWorktree = localDb
