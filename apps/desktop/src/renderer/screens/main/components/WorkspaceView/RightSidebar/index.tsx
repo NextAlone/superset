@@ -21,6 +21,7 @@ import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
 import { useScrollContext } from "../ChangesContent";
 import { ChangesView } from "./ChangesView";
+import { JjChangesView } from "./JjChangesView";
 import { FilesView } from "./FilesView";
 import { getSidebarHeaderTabButtonClassName } from "./headerTabStyles";
 
@@ -78,6 +79,7 @@ export function RightSidebar() {
 		{ enabled: !!workspaceId },
 	);
 	const worktreePath = workspace?.worktreePath;
+	const isJj = workspace?.project?.vcsType === "jj";
 	const currentMode = useSidebarStore((s) => s.currentMode);
 	const rightSidebarTab = useSidebarStore((s) => s.rightSidebarTab);
 	const setRightSidebarTab = useSidebarStore((s) => s.setRightSidebarTab);
@@ -227,11 +229,18 @@ export function RightSidebar() {
 							: "hidden"
 					}
 				>
-					<ChangesView
-						onFileOpen={handleFileOpen}
-						isExpandedView={isExpanded}
-						isActive={rightSidebarTab === RightSidebarTab.Changes}
-					/>
+					{isJj ? (
+						<JjChangesView
+							onFileOpen={handleFileOpen}
+							isExpandedView={isExpanded}
+						/>
+					) : (
+						<ChangesView
+							onFileOpen={handleFileOpen}
+							isExpandedView={isExpanded}
+							isActive={rightSidebarTab === RightSidebarTab.Changes}
+						/>
+					)}
 				</div>
 			)}
 			<div
