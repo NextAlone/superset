@@ -28,6 +28,7 @@ runs:
 
     - name: Download x64 macOS update manifest
       uses: actions/download-artifact@v4
+      continue-on-error: true
       with:
         name: ${{ inputs.artifact-prefix }}-mac-x64-update-manifest
         path: manifests/x64
