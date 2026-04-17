@@ -11,7 +11,7 @@ import {
 } from "../workspaces/utils/base-branch-config";
 import { getCurrentBranch } from "../workspaces/utils/git";
 import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
-import { getVcsProvider } from "../workspaces/utils/vcs";
+import { detectVcsType, getVcsProvider } from "../workspaces/utils/vcs";
 import { gitSwitchBranch } from "./security/git-commands";
 import {
 	assertRegisteredWorktree,
@@ -35,6 +35,58 @@ export const createBranchesRouter = () => {
 					currentBranch: string | null;
 				}> => {
 					assertRegisteredWorktree(input.worktreePath);
+
+					if (detectVcsType(input.worktreePath) === "jj") {
+						const provider = getVcsProvider(input.worktreePath);
+						const [currentBranch, bookmarks, defaultBranch] = await Promise.all(
+							[
+								provider.getCurrentBranch(input.worktreePath),
+								provider.listBranches(input.worktreePath),
+								provider.getDefaultBranch(input.worktreePath),
+							],
+						);
+
+						const { compareBaseBranch: configuredCompareBaseBranch } =
+							currentBranch
+								? await getBranchBaseConfig({
+										repoPath: input.worktreePath,
+										branch: currentBranch,
+									})
+								: { compareBaseBranch: null };
+						const persistedWorktree = localDb
+							.select({
+								branch: worktrees.branch,
+								baseBranch: worktrees.baseBranch,
+							})
+							.from(worktrees)
+							.where(eq(worktrees.path, input.worktreePath))
+							.get();
+						const persistedBaseBranch =
+							persistedWorktree &&
+							(!currentBranch || persistedWorktree.branch === currentBranch)
+								? (persistedWorktree.baseBranch?.trim() ?? null)
+								: null;
+
+						const local = bookmarks.local.map((b) => ({
+							branch: b,
+							lastCommitDate: 0,
+						}));
+						// Merge local + remote so dropdown shows all bookmarks,
+						// mirroring how git side uses remote refs as base candidates.
+						const remote = Array.from(
+							new Set([...bookmarks.remote, ...bookmarks.local]),
+						).sort();
+
+						return {
+							local,
+							remote,
+							defaultBranch,
+							checkedOutBranches: {},
+							worktreeBaseBranch:
+								configuredCompareBaseBranch ?? persistedBaseBranch,
+							currentBranch,
+						};
+					}
 
 					const git = await getSimpleGitWithShellPath(input.worktreePath);
 

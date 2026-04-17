@@ -22,6 +22,7 @@ import { useChangesStore } from "renderer/stores/changes";
 import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
 import { FileList } from "../ChangesView/components/FileList";
+import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,7 +54,6 @@ export function JjChangesView({
 	const projectId = workspace?.projectId;
 
 	// ---- Local UI state ---------------------------------------------------
-	const [baseBookmark, setBaseBookmark] = useState("main");
 	const [description, setDescription] = useState("");
 	const [sections, setSections] = useState({
 		changes: true,
@@ -63,6 +63,15 @@ export function JjChangesView({
 
 	const descriptionRef = useRef<HTMLTextAreaElement>(null);
 	const lastSyncedDesc = useRef("");
+
+	// ---- Base bookmark (persisted via `changes.getBranches`) --------------
+	const { data: branchData } = electronTrpc.changes.getBranches.useQuery(
+		{ worktreePath: worktreePath ?? "" },
+		{ enabled: !!worktreePath, staleTime: 10_000 },
+	);
+	const defaultBookmark = branchData?.defaultBranch ?? "main";
+	const baseBookmark =
+		branchData?.worktreeBaseBranch ?? defaultBookmark ?? "main";
 
 	// ---- Store (file selection / view mode) --------------------------------
 	const { fileListViewMode, selectFile, getSelectedFile } = useChangesStore();
@@ -232,8 +241,13 @@ export function JjChangesView({
 					<TooltipContent side="bottom">Refresh</TooltipContent>
 				</Tooltip>
 
-				<span className="text-xs text-muted-foreground truncate">
-					Base: {changeStatus.baseBookmark}
+				<span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+					Base:
+					<JjBaseBookmarkSelector
+						worktreePath={worktreePath}
+						effectiveBaseBookmark={changeStatus.baseBookmark}
+						defaultBookmark={defaultBookmark}
+					/>
 				</span>
 
 				{changeStatus.hasConflicts && (

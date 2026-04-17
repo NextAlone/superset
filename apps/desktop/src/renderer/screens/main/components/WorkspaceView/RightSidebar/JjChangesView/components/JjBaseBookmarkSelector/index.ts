@@ -1,0 +1,1 @@
+export { JjBaseBookmarkSelector } from "./JjBaseBookmarkSelector";
