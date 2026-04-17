@@ -1,4 +1,4 @@
-import { worktrees } from "@superset/local-db";
+import { projects, worktrees } from "@superset/local-db";
 import { eq } from "drizzle-orm";
 import { localDb } from "main/lib/local-db";
 import type { SimpleGit } from "simple-git";
@@ -17,6 +17,7 @@ import {
 	assertRegisteredWorktree,
 	getRegisteredWorktree,
 } from "./security/path-validation";
+import { readPersistedJjBase } from "./utils/jj-base-branch";
 import { clearStatusCacheForWorktree } from "./utils/status-cache";
 
 export const createBranchesRouter = () => {
@@ -46,26 +47,13 @@ export const createBranchesRouter = () => {
 							],
 						);
 
-						const { compareBaseBranch: configuredCompareBaseBranch } =
-							currentBranch
-								? await getBranchBaseConfig({
-										repoPath: input.worktreePath,
-										branch: currentBranch,
-									})
-								: { compareBaseBranch: null };
-						const persistedWorktree = localDb
-							.select({
-								branch: worktrees.branch,
-								baseBranch: worktrees.baseBranch,
-							})
-							.from(worktrees)
-							.where(eq(worktrees.path, input.worktreePath))
-							.get();
-						const persistedBaseBranch =
-							persistedWorktree &&
-							(!currentBranch || persistedWorktree.branch === currentBranch)
-								? (persistedWorktree.baseBranch?.trim() ?? null)
-								: null;
+						// jj bookmarks move with `jj edit` / `jj new`, so keying the
+						// persisted base on branch name is unreliable. Persist by
+						// path: worktrees row for git-worktree sub-paths, projects
+						// row when the path is the project's main repo.
+						const persistedBaseBranch = readPersistedJjBase(
+							input.worktreePath,
+						);
 
 						const local = bookmarks.local.map((b) => ({
 							branch: b,
@@ -82,8 +70,7 @@ export const createBranchesRouter = () => {
 							remote,
 							defaultBranch,
 							checkedOutBranches: {},
-							worktreeBaseBranch:
-								configuredCompareBaseBranch ?? persistedBaseBranch,
+							worktreeBaseBranch: persistedBaseBranch,
 							currentBranch,
 						};
 					}
@@ -190,39 +177,57 @@ export const createBranchesRouter = () => {
 			.mutation(async ({ input }): Promise<{ success: boolean }> => {
 				assertRegisteredWorktree(input.worktreePath);
 
-				const provider = getVcsProvider(input.worktreePath);
-				const currentBranch =
-					(await provider.getCurrentBranch(input.worktreePath)) ||
-					(await provider.getDefaultBranch(input.worktreePath));
-				if (!currentBranch) {
-					throw new Error("Could not determine current branch");
+				const isJj = detectVcsType(input.worktreePath) === "jj";
+
+				// For jj repos, skip the branch-keyed git config write — jj
+				// bookmarks move with `jj edit` / `jj new`, so the key is
+				// unreliable. Persist per-workspace in localDb only.
+				if (!isJj) {
+					const provider = getVcsProvider(input.worktreePath);
+					const currentBranch =
+						(await provider.getCurrentBranch(input.worktreePath)) ||
+						(await provider.getDefaultBranch(input.worktreePath));
+					if (!currentBranch) {
+						throw new Error("Could not determine current branch");
+					}
+
+					if (input.baseBranch) {
+						await setBranchBaseConfig({
+							repoPath: input.worktreePath,
+							branch: currentBranch,
+							compareBaseBranch: input.baseBranch,
+							isExplicit: true,
+						});
+					} else {
+						await unsetBranchBaseConfig({
+							repoPath: input.worktreePath,
+							branch: currentBranch,
+						});
+					}
 				}
 
-				if (input.baseBranch) {
-					await setBranchBaseConfig({
-						repoPath: input.worktreePath,
-						branch: currentBranch,
-						compareBaseBranch: input.baseBranch,
-						isExplicit: true,
-					});
-				} else {
-					await unsetBranchBaseConfig({
-						repoPath: input.worktreePath,
-						branch: currentBranch,
-					});
-				}
-
-				localDb
+				// assertRegisteredWorktree accepts worktrees.path OR
+				// projects.mainRepoPath, so one of the two matches.
+				const worktreeUpdate = localDb
 					.update(worktrees)
 					.set({ baseBranch: input.baseBranch })
 					.where(eq(worktrees.path, input.worktreePath))
 					.run();
+
+				if (worktreeUpdate.changes === 0) {
+					localDb
+						.update(projects)
+						.set({ workspaceBaseBranch: input.baseBranch })
+						.where(eq(projects.mainRepoPath, input.worktreePath))
+						.run();
+				}
 
 				clearStatusCacheForWorktree(input.worktreePath);
 				return { success: true };
 			}),
 	});
 };
+
 
 async function getLocalBranchesWithDates(
 	git: SimpleGit,

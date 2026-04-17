@@ -1,12 +1,14 @@
 import type { ChangedFile } from "shared/changes-types";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
+import { detectVcsType, getVcsProvider } from "../workspaces/utils/vcs";
 import {
 	applyJjDiffStat,
 	findJjRepoRoot,
 	parseJjDiffSummary,
 } from "./jj-status";
 import { assertRegisteredWorktree } from "./security/path-validation";
+import { readPersistedJjBase } from "./utils/jj-base-branch";
 import { jj } from "./utils/jj-cli";
 
 // ---------------------------------------------------------------------------
@@ -252,5 +254,64 @@ export function createJjRouter() {
 					hasConflicts: conflictRaw.trim() === "true",
 				};
 			}),
+
+		// ---------------------------------------------------------------
+		// sidebar status — lightweight ahead/base query for the workspace
+		// list. Starship-style "<base>~<ahead>" display.
+		// Returns null when the workspace is not a jj repo.
+		// ---------------------------------------------------------------
+		jjGetSidebarStatus: publicProcedure
+			.input(z.object({ worktreePath: z.string() }))
+			.query(
+				async ({
+					input,
+				}): Promise<{
+					baseBookmark: string;
+					ahead: number;
+					hasConflicts: boolean;
+				} | null> => {
+					assertRegisteredWorktree(input.worktreePath);
+					if (detectVcsType(input.worktreePath) !== "jj") return null;
+
+					const repoRoot =
+						findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
+					const provider = getVcsProvider(input.worktreePath);
+					const persisted = readPersistedJjBase(input.worktreePath);
+					const baseBookmark =
+						persisted ??
+						(await provider.getDefaultBranch(input.worktreePath)) ??
+						"main";
+					const baseRef = await resolveBaseRef(repoRoot, baseBookmark);
+
+					try {
+						const [aheadOut, conflictOut] = await Promise.allSettled([
+							jj(repoRoot, [
+								"log",
+								"-r",
+								`::@ ~ ::${baseRef}`,
+								"--no-graph",
+								"-T",
+								'change_id ++ "\\n"',
+							]),
+							jj(repoRoot, [
+								"log",
+								"-r",
+								"@",
+								"--no-graph",
+								"-T",
+								"conflict",
+							]),
+						]);
+
+						return {
+							baseBookmark,
+							ahead: countLines(resolve(aheadOut)),
+							hasConflicts: resolve(conflictOut).trim() === "true",
+						};
+					} catch {
+						return { baseBookmark, ahead: 0, hasConflicts: false };
+					}
+				},
+			),
 	});
 }

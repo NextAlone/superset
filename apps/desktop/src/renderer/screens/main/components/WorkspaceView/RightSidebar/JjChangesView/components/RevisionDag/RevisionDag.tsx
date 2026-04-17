@@ -11,7 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { useMemo } from "react";
-import { VscBookmark, VscEdit, VscTrash } from "react-icons/vsc";
+import { VscAdd, VscBookmark, VscEdit, VscTrash } from "react-icons/vsc";
 import { layoutDag } from "./dag-layout";
 import type { DagNode } from "./types";
 
@@ -21,6 +21,7 @@ interface RevisionDagProps {
 	isEditPending?: boolean;
 	availableBookmarks?: string[];
 	onEdit?: (changeId: string) => void;
+	onNewChild?: (changeId: string) => void;
 	onSquashInto?: (changeId: string) => void;
 	onRebaseOnto?: (changeId: string) => void;
 	onBookmarkCreate?: (changeId: string) => void;
@@ -49,6 +50,7 @@ export function RevisionDag({
 	isEditPending = false,
 	availableBookmarks = [],
 	onEdit,
+	onNewChild,
 	onSquashInto,
 	onRebaseOnto,
 	onBookmarkCreate,
@@ -177,6 +179,7 @@ export function RevisionDag({
 						isEditPending={isEditPending}
 						availableBookmarks={availableBookmarks}
 						onEdit={onEdit}
+						onNewChild={onNewChild}
 						onSquashInto={onSquashInto}
 						onRebaseOnto={onRebaseOnto}
 						onBookmarkCreate={onBookmarkCreate}
@@ -208,6 +211,7 @@ interface DagNodeRowProps {
 	isEditPending: boolean;
 	availableBookmarks: string[];
 	onEdit?: (changeId: string) => void;
+	onNewChild?: (changeId: string) => void;
 	onSquashInto?: (changeId: string) => void;
 	onRebaseOnto?: (changeId: string) => void;
 	onBookmarkCreate?: (changeId: string) => void;
@@ -221,6 +225,7 @@ function DagNodeRow({
 	isEditPending,
 	availableBookmarks,
 	onEdit,
+	onNewChild,
 	onSquashInto,
 	onRebaseOnto,
 	onBookmarkCreate,
@@ -285,6 +290,13 @@ function DagNodeRow({
 				>
 					<VscEdit className="size-3.5 mr-2" />
 					Edit this change
+				</ContextMenuItem>
+				<ContextMenuItem
+					disabled={!onNewChild}
+					onSelect={() => onNewChild?.(node.changeId)}
+				>
+					<VscAdd className="size-3.5 mr-2" />
+					New change here
 				</ContextMenuItem>
 				<ContextMenuSeparator />
 				<ContextMenuItem

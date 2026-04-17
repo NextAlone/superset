@@ -113,6 +113,30 @@ export function createJjMutationsRouter() {
 			}),
 
 		// ---------------------------------------------------------------
+		// new — create a new empty change as a child of <changeId>
+		// ---------------------------------------------------------------
+		jjNew: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					changeId: z.string().min(1),
+					message: z.string().optional(),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				assertRegisteredWorktree(input.worktreePath);
+				const repoRoot =
+					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
+
+				const args = ["new", input.changeId];
+				if (input.message) args.push("-m", input.message);
+				await jj(repoRoot, args);
+				clearStatusCacheForWorktree(input.worktreePath);
+
+				return { success: true as const };
+			}),
+
+		// ---------------------------------------------------------------
 		// squashInto — squash current @ into a specific target change
 		// ---------------------------------------------------------------
 		jjSquashInto: publicProcedure

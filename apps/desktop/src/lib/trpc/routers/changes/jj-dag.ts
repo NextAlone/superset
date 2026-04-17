@@ -110,8 +110,12 @@ export function createJjDagRouter() {
 				const baseBookmark = input.baseBookmark ?? "main";
 				const baseRef = await resolveBaseRef(repoRoot, baseBookmark);
 
-				// Revset: own work + unmerged bookmark heads, excluding merged trunk
-				const revset = `(::@ | bookmarks()) ~ ::${baseRef}`;
+				// Revset: every change strictly after base, up to any visible
+				// head. `base..` is equivalent to `::visible_heads() ~ ::base`
+				// and captures siblings of `@` (e.g. parallel branches) that
+				// `::@ | @::` would miss. Also union in bookmarks so unmerged
+				// bookmark tips show even when they're not a visible head.
+				const revset = `(${baseRef}..) | (bookmarks() ~ ::${baseRef})`;
 
 				const output = await jj(repoRoot, [
 					"log",

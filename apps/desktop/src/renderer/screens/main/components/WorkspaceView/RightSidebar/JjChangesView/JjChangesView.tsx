@@ -136,6 +136,14 @@ export function JjChangesView({
 		onError: (err) => toast.error(`Edit failed: ${err.message}`),
 	});
 
+	const newMutation = electronTrpc.changes.jjNew.useMutation({
+		onSuccess: () => {
+			toast.success("New change created");
+			refetch();
+		},
+		onError: (err) => toast.error(`New failed: ${err.message}`),
+	});
+
 	// ---- Bookmark state + mutations ---------------------------------------
 	const [bookmarkPrompt, setBookmarkPrompt] =
 		useState<BookmarkPromptRequest | null>(null);
@@ -282,6 +290,14 @@ export function JjChangesView({
 			editMutation.mutate({ worktreePath, changeId });
 		},
 		[worktreePath, editMutation],
+	);
+
+	const handleNewChild = useCallback(
+		(changeId: string) => {
+			if (!worktreePath) return;
+			newMutation.mutate({ worktreePath, changeId });
+		},
+		[worktreePath, newMutation],
 	);
 
 	// ---- Bookmark handlers -------------------------------------------------
@@ -756,6 +772,7 @@ export function JjChangesView({
 									isEditPending={editMutation.isPending}
 									availableBookmarks={allBookmarks}
 									onEdit={handleEdit}
+									onNewChild={handleNewChild}
 									onSquashInto={handleSquashInto}
 									onRebaseOnto={handleRebaseOnto}
 									onBookmarkCreate={openCreateBookmarkPrompt}

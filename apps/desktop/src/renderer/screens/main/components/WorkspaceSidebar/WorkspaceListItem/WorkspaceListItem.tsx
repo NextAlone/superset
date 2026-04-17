@@ -170,6 +170,17 @@ export function WorkspaceListItem({
 			},
 		);
 
+	// Starship-style jj status: <base>~<ahead>. Null for non-jj repos.
+	const { data: jjSidebarStatus } =
+		electronTrpc.changes.jjGetSidebarStatus.useQuery(
+			{ worktreePath: worktreePath ?? "" },
+			{
+				enabled: !!worktreePath,
+				refetchInterval: 3000,
+				staleTime: 2000,
+			},
+		);
+
 	useBranchSyncInvalidation({
 		gitBranch: localChanges?.branch,
 		workspaceBranch: branch,
@@ -434,7 +445,9 @@ export function WorkspaceListItem({
 							<div className="flex items-center gap-2 text-[11px] w-full">
 								{showBranchSubtitle && (
 									<span className="text-muted-foreground/60 truncate font-mono leading-tight">
-										{branch}
+										{jjSidebarStatus
+											? `${jjSidebarStatus.baseBookmark}~${jjSidebarStatus.ahead}${jjSidebarStatus.hasConflicts ? "*" : ""}`
+											: branch}
 									</span>
 								)}
 								{pr && (
