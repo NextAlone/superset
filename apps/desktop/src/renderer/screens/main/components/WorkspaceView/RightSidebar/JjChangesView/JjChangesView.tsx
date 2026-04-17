@@ -27,6 +27,7 @@ import {
 } from "./components/BookmarkPromptDialog";
 import { ConfirmDialog, type ConfirmRequest } from "./components/ConfirmDialog";
 import { ConflictEditor } from "./components/ConflictEditor";
+import { CurrentBookmarkMenu } from "./components/CurrentBookmarkMenu";
 import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
 import { RevisionDag } from "./components/RevisionDag";
 
@@ -204,6 +205,9 @@ export function JjChangesView({
 
 	// ---- Conflict editor state --------------------------------------------
 	const [conflictEditorOpen, setConflictEditorOpen] = useState(false);
+	const [conflictEditorInitialPath, setConflictEditorInitialPath] = useState<
+		string | null
+	>(null);
 	const conflictListQuery = electronTrpc.changes.jjConflictList.useQuery(
 		{ worktreePath: worktreePath ?? "" },
 		{
@@ -212,6 +216,10 @@ export function JjChangesView({
 		},
 	);
 	const conflictCount = conflictListQuery.data?.length ?? 0;
+	const conflictPathSet = useMemo(
+		() => new Set((conflictListQuery.data ?? []).map((f) => f.path)),
+		[conflictListQuery.data],
+	);
 
 	// ---- DAG query ---------------------------------------------------------
 	const dagQuery = electronTrpc.changes.jjGetDag.useQuery(
@@ -422,6 +430,11 @@ export function JjChangesView({
 	const handleFileSelect = useCallback(
 		(file: ChangedFile, category: ChangeCategory) => {
 			if (!workspaceId || !worktreePath) return;
+			if (conflictPathSet.has(file.path)) {
+				setConflictEditorInitialPath(file.path);
+				setConflictEditorOpen(true);
+				return;
+			}
 			selectFile(
 				workspaceId,
 				toAbsoluteWorkspacePath(worktreePath, file.path),
@@ -431,7 +444,7 @@ export function JjChangesView({
 			);
 			onFileOpen?.(file, category);
 		},
-		[workspaceId, worktreePath, selectFile, onFileOpen],
+		[workspaceId, worktreePath, conflictPathSet, selectFile, onFileOpen],
 	);
 
 	const toggleSection = useCallback(
@@ -512,11 +525,12 @@ export function JjChangesView({
 
 				<span className="flex-1" />
 
-				{changeStatus.bookmark && (
-					<span className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground font-mono">
-						{changeStatus.bookmark}
-					</span>
-				)}
+				<CurrentBookmarkMenu
+					bookmark={changeStatus.bookmark}
+					onCreateAtHead={() => openCreateBookmarkPrompt(changeStatus.changeId)}
+					onRename={openRenameBookmarkPrompt}
+					onDelete={handleBookmarkDelete}
+				/>
 			</div>
 
 			{/* Change ID + Description */}
@@ -582,7 +596,10 @@ export function JjChangesView({
 						variant="outline"
 						size="sm"
 						className="h-6 text-[11px] px-2"
-						onClick={() => setConflictEditorOpen(true)}
+						onClick={() => {
+							setConflictEditorInitialPath(null);
+							setConflictEditorOpen(true);
+						}}
 					>
 						Resolve…
 					</Button>
@@ -772,7 +789,11 @@ export function JjChangesView({
 			<ConflictEditor
 				worktreePath={worktreePath}
 				open={conflictEditorOpen}
-				onOpenChange={setConflictEditorOpen}
+				initialFilePath={conflictEditorInitialPath}
+				onOpenChange={(open) => {
+					setConflictEditorOpen(open);
+					if (!open) setConflictEditorInitialPath(null);
+				}}
 				onResolved={() => {
 					conflictListQuery.refetch();
 					refetch();

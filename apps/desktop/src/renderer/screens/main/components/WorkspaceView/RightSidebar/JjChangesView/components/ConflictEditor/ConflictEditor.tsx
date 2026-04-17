@@ -11,13 +11,14 @@ import { useEffect, useMemo, useState } from "react";
 import { VscWarning } from "react-icons/vsc";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
-	hasUnresolvedMarkers,
+	hasUnresolvedConflictMarkers,
 	parseJjConflictMarkers,
-} from "./conflict-parser";
+} from "shared/jj-conflict-parser";
 
 interface ConflictEditorProps {
 	worktreePath: string;
 	open: boolean;
+	initialFilePath?: string | null;
 	onOpenChange: (open: boolean) => void;
 	onResolved?: () => void;
 }
@@ -25,6 +26,7 @@ interface ConflictEditorProps {
 export function ConflictEditor({
 	worktreePath,
 	open,
+	initialFilePath = null,
 	onOpenChange,
 	onResolved,
 }: ConflictEditorProps) {
@@ -36,13 +38,17 @@ export function ConflictEditor({
 	const [selectedPath, setSelectedPath] = useState<string | null>(null);
 	useEffect(() => {
 		if (!open) return;
+		if (initialFilePath) {
+			setSelectedPath(initialFilePath);
+			return;
+		}
 		const list = listQuery.data ?? [];
 		if (!selectedPath && list.length > 0) {
 			setSelectedPath(list[0].path);
 		} else if (selectedPath && !list.some((f) => f.path === selectedPath)) {
 			setSelectedPath(list[0]?.path ?? null);
 		}
-	}, [open, listQuery.data, selectedPath]);
+	}, [open, initialFilePath, listQuery.data, selectedPath]);
 
 	const contentQuery = electronTrpc.changes.jjConflictContent.useQuery(
 		{ worktreePath, filePath: selectedPath ?? "" },
@@ -65,7 +71,7 @@ export function ConflictEditor({
 
 	const regions = useMemo(() => parseJjConflictMarkers(editor), [editor]);
 	const dirty = contentQuery.data ? editor !== contentQuery.data.raw : false;
-	const unresolved = hasUnresolvedMarkers(editor);
+	const unresolved = hasUnresolvedConflictMarkers(editor);
 
 	const handleSave = () => {
 		if (!selectedPath) return;

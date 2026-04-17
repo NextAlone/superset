@@ -4,8 +4,16 @@ export interface ConflictRegion {
 	right: string;
 }
 
-// Mirror of parseJjConflictMarkers in jj-conflicts.ts so the renderer can
-// reason about markers locally while typing without round-tripping to main.
+// Parses jj's diff3-style conflict markers. Example:
+//   <<<<<<< Conflict 1 of N
+//   +++++++ Contents of side #1
+//   <left content>
+//   ------- Contents of base
+//   <base content>
+//   +++++++ Contents of side #2
+//   <right content>
+//   >>>>>>> Conflict 1 of N ends
+// Non-conflict regions are ignored; only the regions are returned.
 export function parseJjConflictMarkers(content: string): ConflictRegion[] {
 	const regions: ConflictRegion[] = [];
 	const lines = content.split("\n");
@@ -18,12 +26,12 @@ export function parseJjConflictMarkers(content: string): ConflictRegion[] {
 				end += 1;
 			}
 			const inner = lines.slice(i + 1, end);
-			let current: "side1" | "base" | "side2" | null = null;
 			const buffers: { side1: string[]; base: string[]; side2: string[] } = {
 				side1: [],
 				base: [],
 				side2: [],
 			};
+			let current: "side1" | "base" | "side2" | null = null;
 			let seenSide1 = false;
 			for (const innerLine of inner) {
 				if (innerLine.startsWith("+++++++")) {
@@ -50,7 +58,7 @@ export function parseJjConflictMarkers(content: string): ConflictRegion[] {
 	return regions;
 }
 
-export function hasUnresolvedMarkers(content: string): boolean {
+export function hasUnresolvedConflictMarkers(content: string): boolean {
 	for (const line of content.split("\n")) {
 		if (line.startsWith("<<<<<<<") || line.startsWith(">>>>>>>")) return true;
 	}

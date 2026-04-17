@@ -1,5 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+	type ConflictRegion,
+	parseJjConflictMarkers,
+} from "shared/jj-conflict-parser";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 import { findJjRepoRoot } from "./jj-status";
@@ -11,20 +15,12 @@ export interface ConflictFile {
 	path: string;
 }
 
-export interface ConflictRegion {
-	base: string;
-	left: string;
-	right: string;
-}
+export type { ConflictRegion };
 
 export interface ConflictContent {
 	raw: string;
 	regions: ConflictRegion[];
 }
-
-// ---------------------------------------------------------------------------
-// Parsers
-// ---------------------------------------------------------------------------
 
 function parseConflictList(output: string): ConflictFile[] {
 	const files: ConflictFile[] = [];
@@ -38,65 +34,6 @@ function parseConflictList(output: string): ConflictFile[] {
 	}
 	return files;
 }
-
-export function parseJjConflictMarkers(content: string): ConflictRegion[] {
-	// jj conflict markers (diff3-like). Example:
-	//   <<<<<<< Conflict 1 of N
-	//   +++++++ Contents of side #1
-	//   <left content>
-	//   ------- Contents of base
-	//   <base content>
-	//   +++++++ Contents of side #2
-	//   <right content>
-	//   >>>>>>> Conflict 1 of N ends
-	const regions: ConflictRegion[] = [];
-	const lines = content.split("\n");
-	let i = 0;
-	while (i < lines.length) {
-		const line = lines[i] ?? "";
-		if (line.startsWith("<<<<<<<")) {
-			// Find the terminating >>>>>>> line
-			let end = i + 1;
-			while (end < lines.length && !(lines[end] ?? "").startsWith(">>>>>>>")) {
-				end += 1;
-			}
-			// Parse the sub-sections between the "+++++++" / "-------" markers.
-			const inner = lines.slice(i + 1, end);
-			let current: "side1" | "base" | "side2" | null = null;
-			const buffers: { side1: string[]; base: string[]; side2: string[] } = {
-				side1: [],
-				base: [],
-				side2: [],
-			};
-			let seenSide1 = false;
-			for (const innerLine of inner) {
-				if (innerLine.startsWith("+++++++")) {
-					current = seenSide1 ? "side2" : "side1";
-					seenSide1 = true;
-					continue;
-				}
-				if (innerLine.startsWith("-------")) {
-					current = "base";
-					continue;
-				}
-				if (current) buffers[current].push(innerLine);
-			}
-			regions.push({
-				left: buffers.side1.join("\n"),
-				base: buffers.base.join("\n"),
-				right: buffers.side2.join("\n"),
-			});
-			i = end + 1;
-			continue;
-		}
-		i += 1;
-	}
-	return regions;
-}
-
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
 
 export function createJjConflictsRouter() {
 	return router({
