@@ -21,6 +21,12 @@ export interface CachedTerminal {
 	fitAddon: FitAddon;
 	searchAddon: SearchAddon;
 	wrapper: HTMLDivElement;
+	/**
+	 * Opens xterm into the wrapper. Idempotent — safe to call on every
+	 * attach. Must run only after the wrapper is inside a live, laid-out
+	 * container; otherwise xterm bakes in zero-sized font-cell metrics.
+	 */
+	openTerminal: () => void;
 	/** Disposes renderer RAF, query suppression, GPU renderer, etc. */
 	cleanupCreation: () => void;
 	/** Last known dimensions — used to skip no-op resize events. */
@@ -75,7 +81,7 @@ export function getOrCreate(
 		console.log(`[v1-terminal-cache] Creating new terminal: ${paneId}`);
 	}
 
-	const { xterm, fitAddon, searchAddon, wrapper, cleanup } =
+	const { xterm, fitAddon, searchAddon, wrapper, openTerminal, cleanup } =
 		createTerminalInWrapper(options);
 
 	const entry: CachedTerminal = {
@@ -83,6 +89,7 @@ export function getOrCreate(
 		fitAddon,
 		searchAddon,
 		wrapper,
+		openTerminal,
 		cleanupCreation: cleanup,
 		subscription: null,
 		streamReady: false,
@@ -111,30 +118,91 @@ export function attachToContainer(
 
 	container.appendChild(entry.wrapper);
 
-	if (container.clientWidth > 0 && container.clientHeight > 0) {
-		entry.fitAddon.fit();
-		entry.lastCols = entry.xterm.cols;
-		entry.lastRows = entry.xterm.rows;
-	}
+	// Now that the wrapper is inside a live container, open xterm (idempotent).
+	// Deferring open() until attach ensures font-cell metrics are measured
+	// against a laid-out element; opening while detached yields zero-sized
+	// metrics that collapse the TUI into the top-left corner.
+	entry.openTerminal();
 
-	// Renderer may have skipped frames while the wrapper was detached.
-	entry.xterm.refresh(0, Math.max(0, entry.xterm.rows - 1));
-
-	// Manage ResizeObserver lifecycle in the cache, not in React.
-	entry.resizeObserver?.disconnect();
-	const observer = new ResizeObserver(() => {
-		if (container.clientWidth === 0 || container.clientHeight === 0) return;
+	// Run fit + refresh against `entry`. Returns true when cols/rows changed.
+	const fitEntry = (label: string): boolean => {
+		if (container.clientWidth === 0 || container.clientHeight === 0) {
+			return false;
+		}
 		const prevCols = entry.lastCols;
 		const prevRows = entry.lastRows;
 		entry.fitAddon.fit();
 		entry.lastCols = entry.xterm.cols;
 		entry.lastRows = entry.xterm.rows;
-		if (entry.lastCols !== prevCols || entry.lastRows !== prevRows) {
+		if (DEBUG_TERMINAL) {
+			const cellWidth = (
+				entry.xterm as unknown as {
+					_core?: {
+						_renderService?: {
+							dimensions?: { css?: { cell?: { width?: number } } };
+						};
+					};
+				}
+			)._core?._renderService?.dimensions?.css?.cell?.width;
+			console.log(
+				`[v1-terminal-cache] fit ${label} paneId=${paneId} containerW=${container.clientWidth} containerH=${container.clientHeight} cols=${entry.xterm.cols} rows=${entry.xterm.rows} cellW=${cellWidth}`,
+			);
+		}
+		return prevCols !== entry.lastCols || prevRows !== entry.lastRows;
+	};
+
+	fitEntry("initial");
+
+	// Renderer may have skipped frames while the wrapper was detached.
+	entry.xterm.refresh(0, Math.max(0, entry.xterm.rows - 1));
+
+	// Follow-up fit after the browser finishes layout for the new split /
+	// flex container. Initial fit can run before the pane has settled to its
+	// final width, and since ResizeObserver skips the first "same-size" tick,
+	// the wrong cols/rows would otherwise stick. Double rAF gives WebGL a
+	// chance to activate and re-measure char size too.
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => {
+			if (!entry.resizeObserver) return; // detached before frame fires
+			if (fitEntry("post-layout")) {
+				entry.xterm.refresh(0, Math.max(0, entry.xterm.rows - 1));
+				onResize?.();
+			}
+		});
+	});
+
+	// Manage ResizeObserver lifecycle in the cache, not in React.
+	entry.resizeObserver?.disconnect();
+	const observer = new ResizeObserver(() => {
+		if (fitEntry("resize")) {
 			onResize?.();
 		}
 	});
 	observer.observe(container);
 	entry.resizeObserver = observer;
+
+	// Jiggle once after the PTY has had time to start the child process
+	// (claude, ink-based TUIs, etc). Without a real size change those TUIs
+	// never fire their SIGWINCH handler and leave the first frame drawn at
+	// some stale/default width. Sending cols-1 then cols back delivers two
+	// real TIOCSWINSZ ioctls, forcing the re-layout that previously required
+	// the user to drag the pane divider. Skip on reattach — the TUI has long
+	// since finished its initial render and the pulse would just flicker.
+	if (!entry.streamReady) {
+		setTimeout(() => {
+			if (!entry.resizeObserver) return;
+			const cols = entry.xterm.cols;
+			const rows = entry.xterm.rows;
+			if (cols <= 2) return;
+			entry.xterm.resize(cols - 1, rows);
+			onResize?.();
+			setTimeout(() => {
+				if (!entry.resizeObserver) return;
+				entry.xterm.resize(cols, rows);
+				onResize?.();
+			}, 40);
+		}, 600);
+	}
 }
 
 export function detachFromContainer(paneId: string): void {

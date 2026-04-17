@@ -540,8 +540,86 @@ export function useTerminalLifecycle({
 				paneId,
 				priority: isFocusedRef.current ? 0 : 1,
 				run: (done) => {
+					let stableSizeWaited = false;
+
+					// Wait until the container reports the same clientWidth/Height
+					// for two consecutive frames before firing createOrAttach. This
+					// lets React/flex finish initial layout so the PTY starts with
+					// the final cols/rows, sparing TUIs like Ink from having to
+					// re-layout on a post-init SIGWINCH (which they often drop).
+					const waitStableSize = (onStable: () => void): void => {
+						const containerEl = terminalRef.current;
+						if (!containerEl) {
+							onStable();
+							return;
+						}
+						// Require 3 consecutive frames of identical size. 150 ms
+						// wasn't enough — some UI state (sidebars, split siblings)
+						// settles hundreds of ms after the terminal mounts, and
+						// PTY cols set during that window gets stuck (TUIs like
+						// Ink drop the follow-up SIGWINCH).
+						const STABLE_FRAMES = 3;
+						const TIMEOUT_MS = 800;
+						const t0 = performance.now();
+						let lastW = containerEl.clientWidth;
+						let lastH = containerEl.clientHeight;
+						let stableFrames = 0;
+						let settled = false;
+						let sizeChanges = 0;
+						const timeoutId = setTimeout(() => {
+							if (settled) return;
+							settled = true;
+							if (DEBUG_TERMINAL) {
+								console.log(
+									`[Terminal] waitStableSize timeout paneId=${paneId} elapsed=${Math.round(
+										performance.now() - t0,
+									)}ms w=${containerEl.clientWidth} h=${containerEl.clientHeight} sizeChanges=${sizeChanges}`,
+								);
+							}
+							onStable();
+						}, TIMEOUT_MS);
+						const check = () => {
+							if (settled) return;
+							if (isUnmounted || attachCanceled) {
+								settled = true;
+								clearTimeout(timeoutId);
+								return;
+							}
+							const w = containerEl.clientWidth;
+							const h = containerEl.clientHeight;
+							if (w > 0 && h > 0 && w === lastW && h === lastH) {
+								stableFrames += 1;
+								if (stableFrames >= STABLE_FRAMES) {
+									settled = true;
+									clearTimeout(timeoutId);
+									if (DEBUG_TERMINAL) {
+										console.log(
+											`[Terminal] waitStableSize stable paneId=${paneId} elapsed=${Math.round(
+												performance.now() - t0,
+											)}ms w=${w} h=${h} sizeChanges=${sizeChanges}`,
+										);
+									}
+									onStable();
+									return;
+								}
+							} else {
+								if (w !== lastW || h !== lastH) sizeChanges += 1;
+								stableFrames = 0;
+								lastW = w;
+								lastH = h;
+							}
+							requestAnimationFrame(check);
+						};
+						requestAnimationFrame(check);
+					};
+
 					const startAttach = (commandToRunAfterAttach?: string) => {
 						if (attachCanceled) return;
+						if (!stableSizeWaited) {
+							stableSizeWaited = true;
+							waitStableSize(() => startAttach(commandToRunAfterAttach));
+							return;
+						}
 						if (attachInFlightByPane.has(paneId)) {
 							cancelAttachWait = waitForAttachClear(paneId, () => {
 								if (attachCanceled || isUnmounted) return;

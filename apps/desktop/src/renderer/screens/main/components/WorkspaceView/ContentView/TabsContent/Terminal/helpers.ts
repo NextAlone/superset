@@ -87,9 +87,12 @@ export interface CreateTerminalOptions {
 }
 
 /**
- * Create an xterm instance opened into a detached wrapper div (not a live container).
- * The wrapper can be moved between DOM containers via appendChild without
- * disposing the terminal — this is the "hide attach" pattern from v2.
+ * Create an xterm instance plus a detached wrapper div. xterm.open() is
+ * deferred to openTerminal() — the returned opener must be called after the
+ * wrapper has been attached to a live, laid-out container. Opening against a
+ * detached element makes getBoundingClientRect() return zero, which bakes in
+ * broken font-cell metrics that no subsequent fit() can repair (TUI output
+ * ends up rendered into a tiny top-left corner).
  *
  * Used by v1-terminal-cache.ts to keep xterm alive across React mount/unmount.
  */
@@ -99,6 +102,7 @@ export function createTerminalInWrapper(options: CreateTerminalOptions = {}): {
 	searchAddon: SearchAddon;
 	wrapper: HTMLDivElement;
 	linkManager: TerminalLinkManager;
+	openTerminal: () => void;
 	cleanup: () => void;
 } {
 	const {
@@ -119,43 +123,55 @@ export function createTerminalInWrapper(options: CreateTerminalOptions = {}): {
 	const imageAddon = new ImageAddon();
 
 	let disposed = false;
+	let opened = false;
 	let webglAddon: WebglAddon | null = null;
 
-	// Open into a detached wrapper div — not the live container.
+	// Wrapper is created detached; xterm.open() is deferred to openTerminal().
 	const wrapper = document.createElement("div");
 	wrapper.style.width = "100%";
 	wrapper.style.height = "100%";
-	xterm.open(wrapper);
 
+	// Addons that do not touch xterm.element can load before open().
 	xterm.loadAddon(fitAddon);
 	xterm.loadAddon(searchAddon);
 	xterm.loadAddon(clipboardAddon);
 	xterm.loadAddon(unicode11Addon);
-	xterm.loadAddon(imageAddon);
 
-	try {
-		xterm.loadAddon(new LigaturesAddon());
-	} catch {
-		// Ligatures not supported by current font
-	}
+	const openTerminal = () => {
+		if (opened || disposed) return;
+		opened = true;
+		xterm.open(wrapper);
 
-	// Defer WebGL to rAF — same pattern as v2 terminal-addons.ts.
-	const rafId = requestAnimationFrame(() => {
-		if (disposed || suggestedRendererType === "dom") return;
-
+		// Renderer-dependent addons must load after open(); their activate
+		// hooks read xterm.element to wire up overlays / GPU contexts.
+		xterm.loadAddon(imageAddon);
 		try {
-			webglAddon = new WebglAddon();
-			webglAddon.onContextLoss(() => {
-				webglAddon?.dispose();
-				webglAddon = null;
-				xterm.refresh(0, xterm.rows - 1);
-			});
-			xterm.loadAddon(webglAddon);
+			xterm.loadAddon(new LigaturesAddon());
 		} catch {
-			suggestedRendererType = "dom";
-			webglAddon = null;
+			// Ligatures not supported by current font
 		}
-	});
+
+		// Load WebGL synchronously so its char-size re-measurement has already
+		// completed by the time callers fit() / createOrAttach() against the
+		// fresh terminal. Deferring to rAF meant the first fit used the DOM
+		// renderer's (wider) cell metrics, shipping a too-small cols value to
+		// the PTY — which TUIs like claude/Ink don't always re-layout cleanly
+		// on the subsequent SIGWINCH.
+		if (suggestedRendererType !== "dom") {
+			try {
+				webglAddon = new WebglAddon();
+				webglAddon.onContextLoss(() => {
+					webglAddon?.dispose();
+					webglAddon = null;
+					xterm.refresh(0, xterm.rows - 1);
+				});
+				xterm.loadAddon(webglAddon);
+			} catch {
+				suggestedRendererType = "dom";
+				webglAddon = null;
+			}
+		}
+	};
 
 	const cleanupQuerySuppression = suppressQueryResponses(xterm);
 
@@ -216,9 +232,9 @@ export function createTerminalInWrapper(options: CreateTerminalOptions = {}): {
 		searchAddon,
 		wrapper,
 		linkManager,
+		openTerminal,
 		cleanup: () => {
 			disposed = true;
-			cancelAnimationFrame(rafId);
 			cleanupQuerySuppression();
 			linkManager.dispose();
 			try {
