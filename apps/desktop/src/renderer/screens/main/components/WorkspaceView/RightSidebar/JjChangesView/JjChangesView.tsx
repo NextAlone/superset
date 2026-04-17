@@ -206,6 +206,30 @@ export function JjChangesView({
 		onError: (err) => toast.error(`Rebase failed: ${err.message}`),
 	});
 
+	const abandonMutation = electronTrpc.changes.jjAbandon.useMutation({
+		onSuccess: () => {
+			toast.success("Change abandoned");
+			refetch();
+		},
+		onError: (err) => toast.error(`Abandon failed: ${err.message}`),
+	});
+
+	const duplicateMutation = electronTrpc.changes.jjDuplicate.useMutation({
+		onSuccess: () => {
+			toast.success("Change duplicated");
+			refetch();
+		},
+		onError: (err) => toast.error(`Duplicate failed: ${err.message}`),
+	});
+
+	const backoutMutation = electronTrpc.changes.jjBackout.useMutation({
+		onSuccess: () => {
+			toast.success("Backed out");
+			refetch();
+		},
+		onError: (err) => toast.error(`Backout failed: ${err.message}`),
+	});
+
 	// ---- Confirm dialog state ---------------------------------------------
 	const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(
 		null,
@@ -441,6 +465,61 @@ export function JjChangesView({
 			});
 		},
 		[worktreePath, rebaseMutation],
+	);
+
+	const handleAbandon = useCallback(
+		(changeId: string) => {
+			if (!worktreePath) return;
+			setConfirmRequest({
+				title: "Abandon this change?",
+				description: (
+					<>
+						Change{" "}
+						<span className="font-mono text-foreground">{changeId}</span> will
+						be abandoned. Descendants will be rebased onto its parent. This
+						rewrites history.
+					</>
+				),
+				confirmLabel: "Abandon",
+				destructive: true,
+				onConfirm: () => {
+					abandonMutation.mutate({ worktreePath, changeId });
+					setConfirmRequest(null);
+				},
+			});
+		},
+		[worktreePath, abandonMutation],
+	);
+
+	const handleDuplicate = useCallback(
+		(changeId: string) => {
+			if (!worktreePath) return;
+			duplicateMutation.mutate({ worktreePath, changeId });
+		},
+		[worktreePath, duplicateMutation],
+	);
+
+	const handleBackout = useCallback(
+		(changeId: string) => {
+			if (!worktreePath) return;
+			setConfirmRequest({
+				title: "Back out this change?",
+				description: (
+					<>
+						A new change reversing{" "}
+						<span className="font-mono text-foreground">{changeId}</span> will
+						be created on top of @.
+					</>
+				),
+				confirmLabel: "Backout",
+				destructive: false,
+				onConfirm: () => {
+					backoutMutation.mutate({ worktreePath, changeId });
+					setConfirmRequest(null);
+				},
+			});
+		},
+		[worktreePath, backoutMutation],
 	);
 
 	const handleFileSelect = useCallback(
@@ -775,6 +854,9 @@ export function JjChangesView({
 									onNewChild={handleNewChild}
 									onSquashInto={handleSquashInto}
 									onRebaseOnto={handleRebaseOnto}
+									onAbandon={handleAbandon}
+									onDuplicate={handleDuplicate}
+									onBackout={handleBackout}
 									onBookmarkCreate={openCreateBookmarkPrompt}
 									onBookmarkMove={handleBookmarkMove}
 									onBookmarkRename={openRenameBookmarkPrompt}
@@ -800,7 +882,9 @@ export function JjChangesView({
 					bookmarkDeleteMutation.isPending ||
 					bookmarkMoveMutation.isPending ||
 					squashIntoMutation.isPending ||
-					rebaseMutation.isPending
+					rebaseMutation.isPending ||
+					abandonMutation.isPending ||
+					backoutMutation.isPending
 				}
 			/>
 			<ConflictEditor

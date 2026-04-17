@@ -11,7 +11,16 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { useMemo } from "react";
-import { VscAdd, VscBookmark, VscEdit, VscTrash } from "react-icons/vsc";
+import {
+	VscAdd,
+	VscBookmark,
+	VscCopy,
+	VscDiscard,
+	VscEdit,
+	VscFold,
+	VscGitMerge,
+	VscTrash,
+} from "react-icons/vsc";
 import { layoutDag } from "./dag-layout";
 import type { DagNode } from "./types";
 
@@ -24,6 +33,9 @@ interface RevisionDagProps {
 	onNewChild?: (changeId: string) => void;
 	onSquashInto?: (changeId: string) => void;
 	onRebaseOnto?: (changeId: string) => void;
+	onAbandon?: (changeId: string) => void;
+	onDuplicate?: (changeId: string) => void;
+	onBackout?: (changeId: string) => void;
 	onBookmarkCreate?: (changeId: string) => void;
 	onBookmarkMove?: (bookmarkName: string, changeId: string) => void;
 	onBookmarkRename?: (name: string) => void;
@@ -53,6 +65,9 @@ export function RevisionDag({
 	onNewChild,
 	onSquashInto,
 	onRebaseOnto,
+	onAbandon,
+	onDuplicate,
+	onBackout,
 	onBookmarkCreate,
 	onBookmarkMove,
 	onBookmarkRename,
@@ -182,6 +197,9 @@ export function RevisionDag({
 						onNewChild={onNewChild}
 						onSquashInto={onSquashInto}
 						onRebaseOnto={onRebaseOnto}
+						onAbandon={onAbandon}
+						onDuplicate={onDuplicate}
+						onBackout={onBackout}
 						onBookmarkCreate={onBookmarkCreate}
 						onBookmarkMove={onBookmarkMove}
 						onBookmarkRename={onBookmarkRename}
@@ -214,6 +232,9 @@ interface DagNodeRowProps {
 	onNewChild?: (changeId: string) => void;
 	onSquashInto?: (changeId: string) => void;
 	onRebaseOnto?: (changeId: string) => void;
+	onAbandon?: (changeId: string) => void;
+	onDuplicate?: (changeId: string) => void;
+	onBackout?: (changeId: string) => void;
 	onBookmarkCreate?: (changeId: string) => void;
 	onBookmarkMove?: (bookmarkName: string, changeId: string) => void;
 	onBookmarkRename?: (name: string) => void;
@@ -228,6 +249,9 @@ function DagNodeRow({
 	onNewChild,
 	onSquashInto,
 	onRebaseOnto,
+	onAbandon,
+	onDuplicate,
+	onBackout,
 	onBookmarkCreate,
 	onBookmarkMove,
 	onBookmarkRename,
@@ -303,13 +327,38 @@ function DagNodeRow({
 					disabled={node.isWorkingCopy || !onSquashInto}
 					onSelect={() => onSquashInto?.(node.changeId)}
 				>
+					<VscFold className="size-3.5 mr-2" />
 					Squash @ into this change
 				</ContextMenuItem>
 				<ContextMenuItem
 					disabled={!onRebaseOnto}
 					onSelect={() => onRebaseOnto?.(node.changeId)}
 				>
+					<VscGitMerge className="size-3.5 mr-2" />
 					Rebase @ onto this change
+				</ContextMenuItem>
+				<ContextMenuItem
+					disabled={!onDuplicate}
+					onSelect={() => onDuplicate?.(node.changeId)}
+				>
+					<VscCopy className="size-3.5 mr-2" />
+					Duplicate
+				</ContextMenuItem>
+				<ContextMenuItem
+					disabled={!onBackout}
+					onSelect={() => onBackout?.(node.changeId)}
+				>
+					<VscDiscard className="size-3.5 mr-2" />
+					Backout
+				</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem
+					className="text-destructive focus:text-destructive"
+					disabled={node.isWorkingCopy || !onAbandon}
+					onSelect={() => onAbandon?.(node.changeId)}
+				>
+					<VscTrash className="size-3.5 mr-2" />
+					Abandon this change
 				</ContextMenuItem>
 				<ContextMenuSeparator />
 				<ContextMenuItem

@@ -189,6 +189,69 @@ export function createJjMutationsRouter() {
 			}),
 
 		// ---------------------------------------------------------------
+		// abandon — drop a change; descendants rebased onto its parent
+		// ---------------------------------------------------------------
+		jjAbandon: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					changeId: z.string().min(1),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				assertRegisteredWorktree(input.worktreePath);
+				const repoRoot =
+					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
+
+				await jj(repoRoot, ["abandon", input.changeId]);
+				clearStatusCacheForWorktree(input.worktreePath);
+
+				return { success: true as const };
+			}),
+
+		// ---------------------------------------------------------------
+		// duplicate — copy a change as a sibling (no history rewrite)
+		// ---------------------------------------------------------------
+		jjDuplicate: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					changeId: z.string().min(1),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				assertRegisteredWorktree(input.worktreePath);
+				const repoRoot =
+					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
+
+				await jj(repoRoot, ["duplicate", input.changeId]);
+				clearStatusCacheForWorktree(input.worktreePath);
+
+				return { success: true as const };
+			}),
+
+		// ---------------------------------------------------------------
+		// backout — apply reverse of a change onto destination (default @)
+		// ---------------------------------------------------------------
+		jjBackout: publicProcedure
+			.input(
+				z.object({
+					worktreePath: z.string(),
+					changeId: z.string().min(1),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				assertRegisteredWorktree(input.worktreePath);
+				const repoRoot =
+					findJjRepoRoot(input.worktreePath) ?? input.worktreePath;
+
+				await jj(repoRoot, ["backout", "-r", input.changeId]);
+				clearStatusCacheForWorktree(input.worktreePath);
+
+				return { success: true as const };
+			}),
+
+		// ---------------------------------------------------------------
 		// discardFile — restore a single file to parent version
 		// ---------------------------------------------------------------
 		jjDiscardFile: publicProcedure
