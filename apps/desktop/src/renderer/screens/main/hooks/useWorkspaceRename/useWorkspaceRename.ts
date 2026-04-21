@@ -4,7 +4,7 @@ import { useUpdateWorkspace } from "renderer/react-query/workspaces/useUpdateWor
 export function useWorkspaceRename(
 	workspaceId: string,
 	workspaceName: string,
-	branch: string,
+	branch: string | null,
 ) {
 	const [isRenaming, setIsRenaming] = useState(false);
 	const [renameValue, setRenameValue] = useState(workspaceName);
@@ -30,11 +30,12 @@ export function useWorkspaceRename(
 		const isCleared = !trimmedValue;
 
 		if (isCleared) {
+			const fallbackName = branch ?? workspaceName;
 			updateWorkspace.mutate({
 				id: workspaceId,
-				patch: { name: branch, isUnnamed: true },
+				patch: { name: fallbackName, isUnnamed: true },
 			});
-			setRenameValue(branch);
+			setRenameValue(fallbackName);
 		} else if (trimmedValue !== workspaceName) {
 			updateWorkspace.mutate({
 				id: workspaceId,

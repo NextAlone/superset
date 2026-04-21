@@ -517,7 +517,7 @@ export const createCreateProcedures = () => {
 					worktreePath,
 					branch,
 					mainRepoPath: project.mainRepoPath,
-					startPointBranch: sourceWorkspace?.branch,
+					startPointBranch: sourceWorkspace?.branch ?? undefined,
 					namingPrompt: input.prompt,
 					useExistingBranch: input.useExistingBranch,
 				});

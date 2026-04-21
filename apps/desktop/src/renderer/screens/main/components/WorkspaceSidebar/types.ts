@@ -2,8 +2,8 @@ export interface SidebarWorkspace {
 	id: string;
 	projectId: string;
 	worktreePath: string;
-	type: "worktree" | "branch";
-	branch: string;
+	type: "worktree" | "branch" | "folder";
+	branch: string | null;
 	name: string;
 	tabOrder: number;
 	isUnread: boolean;

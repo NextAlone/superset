@@ -159,7 +159,7 @@ export const createGitStatusProcedures = () => {
 				}
 
 				const project = getProject(workspace.projectId);
-				if (!project) {
+				if (!project || !workspace.branch) {
 					return { ahead: 0, behind: 0 };
 				}
 

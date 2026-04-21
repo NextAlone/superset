@@ -69,7 +69,7 @@ async function execute(
 			created.push({
 				workspaceId: result.workspace.id,
 				workspaceName: result.workspace.name,
-				branch: result.workspace.branch,
+				branch: result.workspace.branch ?? "",
 				worktreePath: result.worktreePath,
 				wasExisting: result.wasExisting,
 			});

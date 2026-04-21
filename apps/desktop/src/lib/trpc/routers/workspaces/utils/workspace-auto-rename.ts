@@ -1,5 +1,5 @@
 interface WorkspaceAutoRenameState {
-	branch: string;
+	branch: string | null;
 	name: string;
 	isUnnamed: boolean | null;
 	deletingAt?: number | null;

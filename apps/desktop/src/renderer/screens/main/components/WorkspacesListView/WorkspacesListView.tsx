@@ -123,7 +123,7 @@ export function WorkspacesListView() {
 				(ws) =>
 					ws.name.toLowerCase().includes(query) ||
 					ws.projectName.toLowerCase().includes(query) ||
-					ws.branch.toLowerCase().includes(query),
+					(ws.branch?.toLowerCase().includes(query) ?? false),
 			);
 		}
 

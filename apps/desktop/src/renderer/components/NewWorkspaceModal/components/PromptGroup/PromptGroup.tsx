@@ -656,7 +656,7 @@ function PromptGroupInner({
 	const activeWorkspacesByBranch = useMemo(() => {
 		const map = new Map<string, string>(); // branch → workspaceId
 		for (const ws of activeWorkspaces) {
-			if (ws.projectId === projectId && !ws.deletingAt) {
+			if (ws.projectId === projectId && !ws.deletingAt && ws.branch) {
 				map.set(ws.branch, ws.id);
 			}
 		}

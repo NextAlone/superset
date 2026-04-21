@@ -130,6 +130,9 @@ export async function attemptWorkspaceAutoRenameFromPrompt({
 	if (!workspace.isUnnamed) {
 		return { status: "skipped", reason: "workspace-named" };
 	}
+	if (!workspace.branch) {
+		return { status: "skipped", reason: "workspace-named" };
+	}
 
 	const {
 		name: generatedName,

@@ -24,8 +24,8 @@ import { WorkspaceIcon } from "./WorkspaceIcon";
 interface CollapsedWorkspaceItemProps {
 	id: string;
 	name: string;
-	branch: string;
-	type: "worktree" | "branch";
+	branch: string | null;
+	type: "worktree" | "branch" | "folder";
 	isActive: boolean;
 	isUnread: boolean;
 	workspaceStatus: ActivePaneStatus | null;

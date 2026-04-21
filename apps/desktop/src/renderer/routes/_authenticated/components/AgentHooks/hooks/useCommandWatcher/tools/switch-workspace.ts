@@ -27,7 +27,7 @@ async function execute(
 		const found = workspaces.find(
 			(ws) =>
 				ws.name.toLowerCase() === searchName ||
-				ws.branch.toLowerCase() === searchName,
+				ws.branch?.toLowerCase() === searchName,
 		);
 
 		if (!found) {

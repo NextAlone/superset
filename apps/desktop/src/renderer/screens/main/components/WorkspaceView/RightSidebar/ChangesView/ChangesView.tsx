@@ -287,7 +287,7 @@ export function ChangesView({
 
 	useBranchSyncInvalidation({
 		gitBranch: status?.branch ?? branchData?.currentBranch ?? undefined,
-		workspaceBranch: workspace?.branch,
+		workspaceBranch: workspace?.branch ?? undefined,
 		workspaceId: workspaceId ?? "",
 	});
 

@@ -137,6 +137,22 @@ async function initGitRepo(path: string): Promise<{ defaultBranch: string }> {
 }
 
 /**
+ * Initialize a colocated jj repo on top of an existing git repo.
+ * Requires `.git/` to already exist at `path`.
+ * Throws if `jj` CLI is unavailable or init fails.
+ */
+async function jjGitInitColocate(path: string): Promise<void> {
+	try {
+		await execWithShellEnv("jj", ["git", "init", "--colocate"], { cwd: path });
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		throw new Error(
+			`Failed to initialize jj (colocated with git): ${msg}. Is jj installed? See https://jj-vcs.github.io/jj/`,
+		);
+	}
+}
+
+/**
  * Returns true if the value looks like a raw jj revset expression rather than
  * a plain bookmark / branch name.  Used to detect stale DB entries that stored
  * the unparsed `trunk()` alias (e.g. `latest(remote_bookmarks(exact:"main", …))`).
@@ -178,6 +194,47 @@ function upsertProject(mainRepoPath: string, defaultBranch: string): Project {
 		.get();
 
 	return project;
+}
+
+/**
+ * Insert or update a project record for a folder-type (no VCS) project.
+ * `vcsType` and `defaultBranch` are stored as null so the UI can detect
+ * folder-only projects without re-probing the filesystem.
+ */
+function upsertFolderProject(mainRepoPath: string): Project {
+	const name = basename(mainRepoPath);
+
+	const existing = localDb
+		.select()
+		.from(projects)
+		.where(eq(projects.mainRepoPath, mainRepoPath))
+		.get();
+
+	if (existing) {
+		localDb
+			.update(projects)
+			.set({ lastOpenedAt: Date.now(), defaultBranch: null, vcsType: null })
+			.where(eq(projects.id, existing.id))
+			.run();
+		return {
+			...existing,
+			lastOpenedAt: Date.now(),
+			defaultBranch: null,
+			vcsType: null,
+		};
+	}
+
+	return localDb
+		.insert(projects)
+		.values({
+			mainRepoPath,
+			name,
+			color: getDefaultProjectColor(),
+			defaultBranch: null,
+			vcsType: null,
+		})
+		.returning()
+		.get();
 }
 
 async function ensureMainWorkspace(project: Project): Promise<void> {
@@ -273,6 +330,52 @@ async function ensureMainWorkspace(project: Project): Promise<void> {
 			auto_created: true,
 		});
 	}
+}
+
+/**
+ * Ensure a `folder` workspace exists for a VCS-less project.
+ * Idempotent; reuses any existing folder/branch workspace for the project.
+ */
+async function ensureFolderWorkspace(project: Project): Promise<void> {
+	const existing = localDb
+		.select()
+		.from(workspaces)
+		.where(
+			and(
+				eq(workspaces.projectId, project.id),
+				isNull(workspaces.deletingAt),
+			),
+		)
+		.get();
+
+	if (existing) {
+		touchWorkspace(existing.id);
+		setLastActiveWorkspace(existing.id);
+		return;
+	}
+
+	const inserted = localDb
+		.insert(workspaces)
+		.values({
+			projectId: project.id,
+			type: "folder",
+			branch: null,
+			name: "default",
+			tabOrder: 0,
+		})
+		.returning()
+		.get();
+
+	setLastActiveWorkspace(inserted.id);
+	activateProject(project);
+
+	track("workspace_opened", {
+		workspace_id: inserted.id,
+		project_id: project.id,
+		type: "folder",
+		was_existing: false,
+		auto_created: true,
+	});
 }
 
 // Callers must additionally reject dot-only names (".", "..") to prevent path traversal
@@ -1186,13 +1289,65 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 			.input(z.object({ path: z.string() }))
 			.mutation(async ({ input }) => {
 				const { defaultBranch } = await initGitRepo(input.path);
+				await jjGitInitColocate(input.path);
 
 				const project = upsertProject(input.path, defaultBranch);
-				await ensureMainWorkspace(project);
+
+				// If a folder workspace already exists for this path (folder → repo
+				// upgrade), promote it in place instead of leaving it as "folder".
+				const folderWs = localDb
+					.select()
+					.from(workspaces)
+					.where(
+						and(
+							eq(workspaces.projectId, project.id),
+							eq(workspaces.type, "folder"),
+							isNull(workspaces.deletingAt),
+						),
+					)
+					.get();
+
+				if (folderWs) {
+					localDb
+						.update(workspaces)
+						.set({ type: "branch", branch: defaultBranch })
+						.where(eq(workspaces.id, folderWs.id))
+						.run();
+					setLastActiveWorkspace(folderWs.id);
+				} else {
+					await ensureMainWorkspace(project);
+				}
 
 				track("project_opened", {
 					project_id: project.id,
 					method: "init",
+				});
+
+				return { project };
+			}),
+
+		openAsFolder: publicProcedure
+			.input(z.object({ path: z.string() }))
+			.mutation(async ({ input }) => {
+				if (!existsSync(input.path)) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Path does not exist",
+					});
+				}
+				if (!statSync(input.path).isDirectory()) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Path is not a directory",
+					});
+				}
+
+				const project = upsertFolderProject(input.path);
+				await ensureFolderWorkspace(project);
+
+				track("project_opened", {
+					project_id: project.id,
+					method: "folder",
 				});
 
 				return { project };
@@ -1387,6 +1542,7 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					let defaultBranch: string;
 					try {
 						({ defaultBranch } = await initGitRepo(repoPath));
+						await jjGitInitColocate(repoPath);
 					} catch (gitErr) {
 						await rm(repoPath, { recursive: true, force: true });
 						throw gitErr;

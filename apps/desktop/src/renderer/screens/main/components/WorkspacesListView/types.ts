@@ -8,8 +8,8 @@ export interface WorkspaceItem {
 	projectId: string;
 	projectName: string;
 	worktreePath: string;
-	type: "worktree" | "branch";
-	branch: string;
+	type: "worktree" | "branch" | "folder";
+	branch: string | null;
 	name: string;
 	lastOpenedAt: number;
 	createdAt: number;

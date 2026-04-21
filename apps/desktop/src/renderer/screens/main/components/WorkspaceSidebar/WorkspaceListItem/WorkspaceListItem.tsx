@@ -38,8 +38,8 @@ interface WorkspaceListItemProps {
 	projectId: string;
 	worktreePath: string;
 	name: string;
-	branch: string;
-	type: "worktree" | "branch";
+	branch: string | null;
+	type: "worktree" | "branch" | "folder";
 	isUnread?: boolean;
 	index: number;
 	shortcutIndex?: number;
@@ -183,7 +183,7 @@ export function WorkspaceListItem({
 
 	useBranchSyncInvalidation({
 		gitBranch: localChanges?.branch,
-		workspaceBranch: branch,
+		workspaceBranch: branch ?? undefined,
 		workspaceId: id,
 	});
 
