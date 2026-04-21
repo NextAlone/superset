@@ -52,9 +52,9 @@ function loadWorkspaceTerminalContext(
 	return {
 		workspace: row.workspace,
 		workspacePath:
-			row.workspace.type === "branch"
-				? (row.mainRepoPath ?? undefined)
-				: (row.worktreePath ?? undefined),
+			row.workspace.type === "worktree"
+				? (row.worktreePath ?? undefined)
+				: (row.mainRepoPath ?? undefined),
 		rootPath: row.mainRepoPath ?? undefined,
 	};
 }
