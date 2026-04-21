@@ -121,7 +121,11 @@ export function dismissUpdate(): void {
 }
 
 export function checkForUpdates(): void {
-	if (env.NODE_ENV === "development" || !IS_AUTO_UPDATE_PLATFORM) {
+	if (
+		env.NODE_ENV === "development" ||
+		!IS_AUTO_UPDATE_PLATFORM ||
+		env.DISABLE_AUTO_UPDATE
+	) {
 		return;
 	}
 	isDismissed = false;
@@ -143,6 +147,14 @@ export function checkForUpdatesInteractive(): void {
 			type: "info",
 			title: "Updates",
 			message: "Auto-updates are disabled in development mode.",
+		});
+		return;
+	}
+	if (env.DISABLE_AUTO_UPDATE) {
+		dialog.showMessageBox({
+			type: "info",
+			title: "Updates",
+			message: "Auto-updates are disabled for this build.",
 		});
 		return;
 	}
@@ -220,6 +232,10 @@ export function simulateError(): void {
 
 export function setupAutoUpdater(): void {
 	if (env.NODE_ENV === "development" || !IS_AUTO_UPDATE_PLATFORM) {
+		return;
+	}
+	if (env.DISABLE_AUTO_UPDATE) {
+		console.info("[auto-updater] Disabled via DISABLE_AUTO_UPDATE env");
 		return;
 	}
 

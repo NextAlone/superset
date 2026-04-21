@@ -26,6 +26,10 @@ export const env = createEnv({
 		SENTRY_DSN_DESKTOP: z.string().optional(),
 		STREAMS_URL: z.url().default("https://superset-stream.fly.dev"),
 		RELAY_URL: z.url().default("https://relay.superset.sh"),
+		DISABLE_AUTO_UPDATE: z
+			.string()
+			.optional()
+			.transform((v) => v === "1" || v === "true"),
 	},
 
 	runtimeEnv: {
@@ -43,6 +47,7 @@ export const env = createEnv({
 		SENTRY_DSN_DESKTOP: process.env.SENTRY_DSN_DESKTOP,
 		STREAMS_URL: process.env.STREAMS_URL,
 		RELAY_URL: process.env.RELAY_URL,
+		DISABLE_AUTO_UPDATE: process.env.DISABLE_AUTO_UPDATE,
 	},
 	emptyStringAsUndefined: true,
 	// Only allow skipping validation in development (never in production)
