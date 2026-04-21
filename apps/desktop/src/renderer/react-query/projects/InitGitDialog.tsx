@@ -10,7 +10,7 @@ import { Button } from "@superset/ui/button";
 import { useGitInitDialogStore } from "renderer/stores/git-init-dialog";
 
 export function InitGitDialog() {
-	const { isOpen, isPending, paths, onConfirm, onCancel } =
+	const { isOpen, isPending, paths, onInit, onOpenAsFolder, onCancel } =
 		useGitInitDialogStore();
 
 	const isSingle = paths.length === 1;
@@ -24,7 +24,7 @@ export function InitGitDialog() {
 		>
 			<AlertDialogContent>
 				<AlertDialogHeader>
-					<AlertDialogTitle>Initialize Git Repository?</AlertDialogTitle>
+					<AlertDialogTitle>This folder isn't a repository</AlertDialogTitle>
 					<AlertDialogDescription asChild>
 						<div className="space-y-2">
 							{isSingle ? (
@@ -32,13 +32,14 @@ export function InitGitDialog() {
 									<span className="font-medium text-foreground">
 										{paths[0]?.split("/").pop()}
 									</span>{" "}
-									is not a git repository. Would you like to initialize one?
+									is not a git repository. Initialize one (git + jj) or open it
+									as a folder?
 								</p>
 							) : (
 								<>
 									<p>
-										The following folders are not git repositories. Would you
-										like to initialize them?
+										The following folders are not git repositories. Initialize
+										them (git + jj) or open them as folders?
 									</p>
 									<ul className="list-disc pl-4 space-y-1">
 										{paths.map((p) => (
@@ -65,8 +66,15 @@ export function InitGitDialog() {
 					>
 						Cancel
 					</Button>
-					<Button disabled={isPending} onClick={() => onConfirm?.()}>
-						{isPending ? "Initializing..." : "Initialize Git"}
+					<Button
+						variant="secondary"
+						disabled={isPending}
+						onClick={() => onOpenAsFolder?.()}
+					>
+						Open as folder
+					</Button>
+					<Button disabled={isPending} onClick={() => onInit?.()}>
+						{isPending ? "Initializing..." : "Initialize jj repo"}
 					</Button>
 				</AlertDialogFooter>
 			</AlertDialogContent>

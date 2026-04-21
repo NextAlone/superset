@@ -18,6 +18,7 @@ export function useOpenProject() {
 	const openNewMutation = useOpenNew();
 	const openFromPathMutation = useOpenFromPath();
 	const initGitAndOpen = electronTrpc.projects.initGitAndOpen.useMutation();
+	const openAsFolder = electronTrpc.projects.openAsFolder.useMutation();
 	const utils = electronTrpc.useUtils();
 
 	const pendingRef = useRef<PendingGitInit | null>(null);
@@ -26,37 +27,49 @@ export function useOpenProject() {
 		(pending: PendingGitInit) => {
 			pendingRef.current = pending;
 
+			const finish = async (
+				run: (path: string) => Promise<Project | null>,
+			) => {
+				const p = pendingRef.current;
+				if (!p) return;
+
+				useGitInitDialogStore.getState().setIsPending(true);
+
+				const projects: Project[] = [...p.immediateSuccesses];
+				try {
+					for (const path of p.paths) {
+						try {
+							const project = await run(path);
+							if (project) projects.push(project);
+						} catch (error) {
+							console.error(
+								"[useOpenProject] Failed to open path:",
+								path,
+								error,
+							);
+						}
+					}
+
+					await utils.projects.getRecents.invalidate();
+				} finally {
+					useGitInitDialogStore.getState().close();
+					pendingRef.current = null;
+					p.resolve(projects);
+				}
+			};
+
 			useGitInitDialogStore.getState().open({
 				paths: pending.paths,
-				onConfirm: async () => {
-					const p = pendingRef.current;
-					if (!p) return;
-
-					useGitInitDialogStore.getState().setIsPending(true);
-
-					const projects: Project[] = [...p.immediateSuccesses];
-
-					try {
-						for (const path of p.paths) {
-							try {
-								const result = await initGitAndOpen.mutateAsync({ path });
-								projects.push(result.project);
-							} catch (error) {
-								console.error(
-									"[useOpenProject] Failed to init git:",
-									path,
-									error,
-								);
-							}
-						}
-
-						await utils.projects.getRecents.invalidate();
-					} finally {
-						useGitInitDialogStore.getState().close();
-						pendingRef.current = null;
-						p.resolve(projects);
-					}
-				},
+				onInit: () =>
+					void finish(async (path) => {
+						const result = await initGitAndOpen.mutateAsync({ path });
+						return result.project;
+					}),
+				onOpenAsFolder: () =>
+					void finish(async (path) => {
+						const result = await openAsFolder.mutateAsync({ path });
+						return result.project;
+					}),
 				onCancel: () => {
 					const p = pendingRef.current;
 					if (!p) return;
@@ -67,7 +80,7 @@ export function useOpenProject() {
 				},
 			});
 		},
-		[initGitAndOpen, utils],
+		[initGitAndOpen, openAsFolder, utils],
 	);
 
 	const openNew = useCallback((): Promise<Project[]> => {
@@ -162,6 +175,7 @@ export function useOpenProject() {
 		isPending:
 			openNewMutation.isPending ||
 			openFromPathMutation.isPending ||
-			initGitAndOpen.isPending,
+			initGitAndOpen.isPending ||
+			openAsFolder.isPending,
 	};
 }
