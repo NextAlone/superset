@@ -5,7 +5,7 @@ import {
 	worktrees,
 } from "@superset/local-db";
 import { TRPCError } from "@trpc/server";
-import { eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, not } from "drizzle-orm";
 import { localDb } from "main/lib/local-db";
 import { z } from "zod";
 import { publicProcedure, router } from "../../..";
@@ -64,7 +64,7 @@ export const createQueryProcedures = () => {
 
 				return {
 					...workspace,
-					type: workspace.type as "worktree" | "branch",
+					type: workspace.type,
 					worktreePath: getWorkspacePath(workspace) ?? "",
 					project: project
 						? {
@@ -97,6 +97,77 @@ export const createQueryProcedures = () => {
 		}),
 
 		getAllGrouped: publicProcedure.query(() => {
+			// Self-heal: align workspace types with project.vcsType.
+			//   - vcsType=null (folder project) must not carry branch/worktree rows
+			//   - vcsType=git/jj must not carry folder rows
+			// Fixes state left behind by legacy code paths where a project was
+			// demoted (Open as folder on a path that previously had a git init)
+			// or upgraded without cleaning the stale workspace row.
+			const allProjects = localDb
+				.select({ id: projects.id, vcsType: projects.vcsType })
+				.from(projects)
+				.all();
+			const folderProjectIds = allProjects
+				.filter((p) => !p.vcsType)
+				.map((p) => p.id);
+			const repoProjectIds = allProjects
+				.filter((p) => !!p.vcsType)
+				.map((p) => p.id);
+			if (folderProjectIds.length > 0) {
+				localDb
+					.delete(workspaces)
+					.where(
+						and(
+							inArray(workspaces.projectId, folderProjectIds),
+							not(eq(workspaces.type, "folder")),
+						),
+					)
+					.run();
+			}
+			if (repoProjectIds.length > 0) {
+				localDb
+					.delete(workspaces)
+					.where(
+						and(
+							inArray(workspaces.projectId, repoProjectIds),
+							eq(workspaces.type, "folder"),
+						),
+					)
+					.run();
+			}
+
+			// Ensure every folder project has a folder workspace. Cleanup above may
+			// have removed the only row for a project; without at least one workspace
+			// the sidebar can't open a terminal for that path.
+			if (folderProjectIds.length > 0) {
+				const projectsWithWorkspace = new Set(
+					localDb
+						.selectDistinct({ projectId: workspaces.projectId })
+						.from(workspaces)
+						.where(
+							and(
+								inArray(workspaces.projectId, folderProjectIds),
+								isNull(workspaces.deletingAt),
+							),
+						)
+						.all()
+						.map((r) => r.projectId),
+				);
+				for (const projectId of folderProjectIds) {
+					if (projectsWithWorkspace.has(projectId)) continue;
+					localDb
+						.insert(workspaces)
+						.values({
+							projectId,
+							type: "folder",
+							branch: null,
+							name: "default",
+							tabOrder: 0,
+						})
+						.run();
+				}
+			}
+
 			type WorkspaceItem = {
 				id: string;
 				projectId: string;

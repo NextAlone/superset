@@ -211,7 +211,17 @@ async function jjFileShow(
 	const env = await getProcessEnvWithShellPath();
 	const { stdout } = await execFileAsync(
 		"jj",
-		["--no-pager", "--color=never", "-R", repoPath, "file", "show", "-r", rev, `root:${filePath}`],
+		[
+			"--no-pager",
+			"--color=never",
+			"-R",
+			repoPath,
+			"file",
+			"show",
+			"-r",
+			rev,
+			`root:${filePath}`,
+		],
 		{ timeout: 30_000, env },
 	);
 	return stdout;
@@ -225,7 +235,10 @@ async function safeJjFileShow(
 	try {
 		return await jjFileShow(repoPath, rev, filePath);
 	} catch (error) {
-		console.error(`[jjFileShow] Failed: rev=${rev} path=${filePath} repo=${repoPath}`, error instanceof Error ? error.message : error);
+		console.error(
+			`[jjFileShow] Failed: rev=${rev} path=${filePath} repo=${repoPath}`,
+			error instanceof Error ? error.message : error,
+		);
 		return null;
 	}
 }
@@ -235,7 +248,7 @@ async function getJjVersions(
 	filePath: string,
 	originalPath: string,
 	category: "against-base" | "committed" | "staged" | "unstaged",
-	defaultBranch: string,
+	_defaultBranch: string,
 	commitHash?: string,
 ): Promise<FileVersions> {
 	switch (category) {

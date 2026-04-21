@@ -1,5 +1,23 @@
 import { access } from "node:fs/promises";
 import {
+	gitCheckoutFile,
+	gitDiscardAllUnstaged,
+	gitStageAll,
+	gitStageFile,
+	gitStash,
+	gitStashPop,
+	gitUnstageAll,
+	gitUnstageFile,
+} from "../../../changes/security/git-commands";
+import {
+	pushCurrentBranch,
+	pushWithResolvedUpstream,
+} from "../../../changes/utils/git-push";
+import {
+	getBranchBaseConfig,
+	setBranchBaseConfig,
+} from "../base-branch-config";
+import {
 	branchExistsOnRemote,
 	checkoutBranch,
 	createWorktree,
@@ -7,8 +25,8 @@ import {
 	deleteLocalBranch,
 	fetchDefaultBranch,
 	getAheadBehindCount,
-	getCurrentBranch,
 	getBranchWorktreePath,
+	getCurrentBranch,
 	getDefaultBranch,
 	getGitRoot,
 	hasOriginRemote,
@@ -23,21 +41,6 @@ import {
 	worktreeExists,
 } from "../git";
 import { getSimpleGitWithShellPath } from "../git-client";
-import { getBranchBaseConfig, setBranchBaseConfig } from "../base-branch-config";
-import {
-	gitCheckoutFile,
-	gitDiscardAllUnstaged,
-	gitStageAll,
-	gitStageFile,
-	gitStash,
-	gitStashPop,
-	gitUnstageAll,
-	gitUnstageFile,
-} from "../../../changes/security/git-commands";
-import {
-	pushCurrentBranch,
-	pushWithResolvedUpstream,
-} from "../../../changes/utils/git-push";
 import type {
 	BranchExistsOnRemoteResult,
 	ExternalWorkspace,
@@ -236,10 +239,16 @@ export class GitProvider implements VcsProvider {
 		const git = await getSimpleGitWithShellPath(repoPath);
 		const localBranch = await getCurrentBranch(repoPath);
 		if (!localBranch) {
-			throw new Error("Cannot push from detached HEAD. Please checkout a branch first.");
+			throw new Error(
+				"Cannot push from detached HEAD. Please checkout a branch first.",
+			);
 		}
 		if (options?.setUpstream) {
-			await pushWithResolvedUpstream({ git, worktreePath: repoPath, localBranch });
+			await pushWithResolvedUpstream({
+				git,
+				worktreePath: repoPath,
+				localBranch,
+			});
 		} else {
 			await pushCurrentBranch({ git, worktreePath: repoPath, localBranch });
 		}

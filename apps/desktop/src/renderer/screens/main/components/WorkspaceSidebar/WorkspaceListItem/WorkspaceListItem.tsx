@@ -65,6 +65,7 @@ export function WorkspaceListItem({
 	orderedWorkspaceIds = [],
 }: WorkspaceListItemProps) {
 	const isBranchWorkspace = type === "branch";
+	const isFolderWorkspace = type === "folder";
 	const navigate = useNavigate();
 	const matchRoute = useMatchRoute();
 	const {
@@ -262,7 +263,8 @@ export function WorkspaceListItem({
 			? { additions: pr.additions, deletions: pr.deletions }
 			: null);
 
-	const showBranchSubtitle = isBranchWorkspace || (!!name && name !== branch);
+	const showBranchSubtitle =
+		!isFolderWorkspace && (isBranchWorkspace || (!!name && name !== branch));
 
 	if (isCollapsed) {
 		return (
@@ -332,6 +334,7 @@ export function WorkspaceListItem({
 						<div className="relative size-5 flex items-center justify-center">
 							<WorkspaceIcon
 								isBranchWorkspace={isBranchWorkspace}
+								isFolderWorkspace={isFolderWorkspace}
 								isActive={isActive}
 								isUnread={isUnread}
 								workspaceStatus={workspaceStatus}
@@ -340,7 +343,15 @@ export function WorkspaceListItem({
 						</div>
 					</TooltipTrigger>
 					<TooltipContent side="right" sideOffset={8}>
-						{isBranchWorkspace ? (
+						{isFolderWorkspace ? (
+							<>
+								<p className="text-xs font-medium">Folder (no VCS)</p>
+								<p className="text-xs text-muted-foreground">
+									Opened as a plain folder. Initialize a repository to enable
+									branches, history, and workspaces.
+								</p>
+							</>
+						) : isBranchWorkspace ? (
 							<>
 								<p className="text-xs font-medium">Local workspace</p>
 								<p className="text-xs text-muted-foreground">

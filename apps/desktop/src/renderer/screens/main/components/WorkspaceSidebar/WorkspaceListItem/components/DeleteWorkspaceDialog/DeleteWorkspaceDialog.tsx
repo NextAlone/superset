@@ -252,8 +252,9 @@ export function DeleteWorkspaceDialog({
 								<span className="text-destructive">{reason}</span>
 							) : (
 								<span className="block">
-									Deleting will permanently remove the {isJj ? "workspace" : "worktree"}. You can hide
-									instead to keep files on disk.
+									Deleting will permanently remove the{" "}
+									{isJj ? "workspace" : "worktree"}. You can hide instead to
+									keep files on disk.
 								</span>
 							)}
 						</div>
@@ -286,7 +287,9 @@ export function DeleteWorkspaceDialog({
 								htmlFor="delete-local-branch"
 								className="text-xs text-muted-foreground cursor-pointer select-none"
 							>
-								{isJj ? "Also delete local bookmark" : "Also delete local branch"}
+								{isJj
+									? "Also delete local bookmark"
+									: "Also delete local branch"}
 							</Label>
 						</div>
 					</div>
@@ -323,7 +326,9 @@ export function DeleteWorkspaceDialog({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent side="top" className="text-xs max-w-[200px]">
-							{isJj ? "Permanently delete workspace from disk." : "Permanently delete workspace and git worktree from disk."}
+							{isJj
+								? "Permanently delete workspace from disk."
+								: "Permanently delete workspace and git worktree from disk."}
 						</TooltipContent>
 					</Tooltip>
 				</AlertDialogFooter>

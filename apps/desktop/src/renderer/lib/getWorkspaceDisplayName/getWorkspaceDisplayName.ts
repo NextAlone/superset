@@ -1,9 +1,13 @@
 export function getWorkspaceDisplayName(
 	workspaceName: string,
-	workspaceType: "worktree" | "branch",
+	workspaceType: "worktree" | "branch" | "folder",
 	projectName?: string | null,
 ): string {
-	return [projectName, workspaceType === "branch" ? "local" : workspaceName]
-		.filter(Boolean)
-		.join(" - ");
+	const suffix =
+		workspaceType === "branch"
+			? "local"
+			: workspaceType === "folder"
+				? null
+				: workspaceName;
+	return [projectName, suffix].filter(Boolean).join(" - ");
 }

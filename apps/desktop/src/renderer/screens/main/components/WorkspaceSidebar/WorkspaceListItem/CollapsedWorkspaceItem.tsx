@@ -55,6 +55,7 @@ export function CollapsedWorkspaceItem({
 	onCopyPath,
 }: CollapsedWorkspaceItemProps) {
 	const isBranchWorkspace = type === "branch";
+	const isFolderWorkspace = type === "folder";
 	const deleteDialogCoordinator = useMemo(
 		() => createContextMenuDeleteDialogCoordinator(onDeleteClick),
 		[onDeleteClick],
@@ -81,6 +82,7 @@ export function CollapsedWorkspaceItem({
 		>
 			<WorkspaceIcon
 				isBranchWorkspace={isBranchWorkspace}
+				isFolderWorkspace={isFolderWorkspace}
 				isActive={isActive}
 				isUnread={isUnread}
 				workspaceStatus={workspaceStatus}

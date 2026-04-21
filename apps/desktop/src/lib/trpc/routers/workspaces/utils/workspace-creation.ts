@@ -12,9 +12,9 @@ import {
 	touchWorkspace,
 	updateActiveWorkspaceIfRemoved,
 } from "./db-helpers";
-import { getVcsProvider } from "./vcs";
 import { resolveWorktreePath } from "./resolve-worktree-path";
 import { copySupersetConfigToWorktree, loadSetupConfig } from "./setup";
+import { getVcsProvider } from "./vcs";
 
 interface CreateWorkspaceFromWorktreeParams {
 	projectId: string;
@@ -111,7 +111,9 @@ export async function createWorkspaceFromExternalWorktree({
 
 	// Check for external worktree/workspace (exists on disk but not tracked in DB)
 	const vcsForList = getVcsProvider(project.mainRepoPath);
-	const externalWorktrees = await vcsForList.listExternalWorkspaces(project.mainRepoPath);
+	const externalWorktrees = await vcsForList.listExternalWorkspaces(
+		project.mainRepoPath,
+	);
 
 	// Filter candidates: exclude main repo, bare, and detached
 	const candidates = externalWorktrees.filter(

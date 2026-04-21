@@ -33,14 +33,16 @@ import {
 	setLastActiveWorkspace,
 	touchWorkspace,
 } from "../workspaces/utils/db-helpers";
+import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
+import { execWithShellEnv } from "../workspaces/utils/shell-env";
 import {
+	detectVcsType,
 	getGitAuthorName,
+	getRepoRoot,
+	getVcsProvider,
 	NotGitRepoError,
 	sanitizeAuthorPrefix,
 } from "../workspaces/utils/vcs";
-import { getRepoRoot, getVcsProvider, detectVcsType } from "../workspaces/utils/vcs";
-import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
-import { execWithShellEnv } from "../workspaces/utils/shell-env";
 import { getDefaultProjectColor } from "./utils/colors";
 import { discoverAndSaveProjectIcon } from "./utils/favicon-discovery";
 import { fetchGitHubOwner, getGitHubAvatarUrl } from "./utils/github";
@@ -238,6 +240,19 @@ function upsertFolderProject(mainRepoPath: string): Project {
 }
 
 async function ensureMainWorkspace(project: Project): Promise<void> {
+	// Clean up any orphan folder workspaces left over from a prior "open as
+	// folder" session; once the project has a VCS, folder workspaces no longer
+	// make sense and would show up as a duplicate sidebar entry.
+	localDb
+		.delete(workspaces)
+		.where(
+			and(
+				eq(workspaces.projectId, project.id),
+				eq(workspaces.type, "folder"),
+			),
+		)
+		.run();
+
 	const existingBranchWorkspace = getBranchWorkspace(project.id);
 
 	if (existingBranchWorkspace) {
@@ -334,15 +349,28 @@ async function ensureMainWorkspace(project: Project): Promise<void> {
 
 /**
  * Ensure a `folder` workspace exists for a VCS-less project.
- * Idempotent; reuses any existing folder/branch workspace for the project.
+ * Idempotent. Any non-folder workspace rows for this project are purged first
+ * so a demoted project (previously a repo, now reopened as a folder) doesn't
+ * keep showing a stale branch/worktree entry in the sidebar.
  */
 async function ensureFolderWorkspace(project: Project): Promise<void> {
+	localDb
+		.delete(workspaces)
+		.where(
+			and(
+				eq(workspaces.projectId, project.id),
+				not(eq(workspaces.type, "folder")),
+			),
+		)
+		.run();
+
 	const existing = localDb
 		.select()
 		.from(workspaces)
 		.where(
 			and(
 				eq(workspaces.projectId, project.id),
+				eq(workspaces.type, "folder"),
 				isNull(workspaces.deletingAt),
 			),
 		)
@@ -830,9 +858,12 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					);
 
 					const defaultBranch =
-						(project.defaultBranch && !looksLikeRevsetExpression(project.defaultBranch))
+						project.defaultBranch &&
+						!looksLikeRevsetExpression(project.defaultBranch)
 							? project.defaultBranch
-							: await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath);
+							: await getVcsProvider(project.mainRepoPath).getDefaultBranch(
+									project.mainRepoPath,
+								);
 
 					branches.sort((a, b) => {
 						if (a.name === defaultBranch) return -1;
@@ -1001,14 +1032,19 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					);
 
 					// Sync with remote in case the default branch changed (e.g. master -> main)
-					const remoteDefaultBranch = await getVcsProvider(project.mainRepoPath).refreshDefaultBranch(
+					const remoteDefaultBranch = await getVcsProvider(
 						project.mainRepoPath,
-					);
+					).refreshDefaultBranch(project.mainRepoPath);
 
 					const defaultBranch =
 						remoteDefaultBranch ||
-						(project.defaultBranch && !looksLikeRevsetExpression(project.defaultBranch) ? project.defaultBranch : null) ||
-						(await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath));
+						(project.defaultBranch &&
+						!looksLikeRevsetExpression(project.defaultBranch)
+							? project.defaultBranch
+							: null) ||
+						(await getVcsProvider(project.mainRepoPath).getDefaultBranch(
+							project.mainRepoPath,
+						));
 
 					if (defaultBranch !== project.defaultBranch) {
 						localDb
@@ -1145,9 +1181,12 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					}
 
 					const defaultBranch =
-						(project.defaultBranch && !looksLikeRevsetExpression(project.defaultBranch))
+						project.defaultBranch &&
+						!looksLikeRevsetExpression(project.defaultBranch)
 							? project.defaultBranch
-							: await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath);
+							: await getVcsProvider(project.mainRepoPath).getDefaultBranch(
+									project.mainRepoPath,
+								);
 
 					// Sort: default branch first, then local before remote, then by date
 					const allBranches = Array.from(branchMap.entries())
@@ -1197,7 +1236,8 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 			for (const selectedPath of result.filePaths) {
 				try {
 					const mainRepoPath = await getRepoRoot(selectedPath);
-					const defaultBranch = await getVcsProvider(mainRepoPath).getDefaultBranch(mainRepoPath);
+					const defaultBranch =
+						await getVcsProvider(mainRepoPath).getDefaultBranch(mainRepoPath);
 
 					const project = upsertProject(mainRepoPath, defaultBranch);
 					await ensureMainWorkspace(project);
@@ -1269,7 +1309,8 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					throw error;
 				}
 
-				const defaultBranch = await getVcsProvider(mainRepoPath).getDefaultBranch(mainRepoPath);
+				const defaultBranch =
+					await getVcsProvider(mainRepoPath).getDefaultBranch(mainRepoPath);
 
 				const project = upsertProject(mainRepoPath, defaultBranch);
 				await ensureMainWorkspace(project);
@@ -1292,31 +1333,9 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 				await jjGitInitColocate(input.path);
 
 				const project = upsertProject(input.path, defaultBranch);
-
-				// If a folder workspace already exists for this path (folder → repo
-				// upgrade), promote it in place instead of leaving it as "folder".
-				const folderWs = localDb
-					.select()
-					.from(workspaces)
-					.where(
-						and(
-							eq(workspaces.projectId, project.id),
-							eq(workspaces.type, "folder"),
-							isNull(workspaces.deletingAt),
-						),
-					)
-					.get();
-
-				if (folderWs) {
-					localDb
-						.update(workspaces)
-						.set({ type: "branch", branch: defaultBranch })
-						.where(eq(workspaces.id, folderWs.id))
-						.run();
-					setLastActiveWorkspace(folderWs.id);
-				} else {
-					await ensureMainWorkspace(project);
-				}
+				// ensureMainWorkspace drops orphan folder workspaces internally, so a
+				// folder → repo upgrade ends with just a single branch workspace.
+				await ensureMainWorkspace(project);
 
 				track("project_opened", {
 					project_id: project.id,
@@ -1473,7 +1492,8 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 
 					// Create new project
 					const name = basename(clonePath);
-					const defaultBranch = await getVcsProvider(clonePath).getDefaultBranch(clonePath);
+					const defaultBranch =
+						await getVcsProvider(clonePath).getDefaultBranch(clonePath);
 					const project = localDb
 						.insert(projects)
 						.values({
@@ -1690,9 +1710,9 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 					throw new Error(`Project ${input.id} not found`);
 				}
 
-				const remoteDefaultBranch = await getVcsProvider(project.mainRepoPath).refreshDefaultBranch(
+				const remoteDefaultBranch = await getVcsProvider(
 					project.mainRepoPath,
-				);
+				).refreshDefaultBranch(project.mainRepoPath);
 
 				if (
 					remoteDefaultBranch &&
@@ -1716,7 +1736,9 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 				const defaultBranch =
 					project.defaultBranch ??
 					remoteDefaultBranch ??
-					(await getVcsProvider(project.mainRepoPath).getDefaultBranch(project.mainRepoPath));
+					(await getVcsProvider(project.mainRepoPath).getDefaultBranch(
+						project.mainRepoPath,
+					));
 
 				return {
 					success: true,

@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ChangedFile, CommitInfo, GitChangesStatus } from "shared/changes-types";
+import type {
+	ChangedFile,
+	CommitInfo,
+	GitChangesStatus,
+} from "shared/changes-types";
 import { execWithShellEnv } from "../workspaces/utils/shell-env";
 
 // ---------------------------------------------------------------------------
@@ -52,13 +56,23 @@ export function parseJjDiffSummary(output: string): ChangedFile[] {
 
 		switch (code) {
 			case "M":
-				files.push({ path: rest, status: "modified", additions: 0, deletions: 0 });
+				files.push({
+					path: rest,
+					status: "modified",
+					additions: 0,
+					deletions: 0,
+				});
 				break;
 			case "A":
 				files.push({ path: rest, status: "added", additions: 0, deletions: 0 });
 				break;
 			case "D":
-				files.push({ path: rest, status: "deleted", additions: 0, deletions: 0 });
+				files.push({
+					path: rest,
+					status: "deleted",
+					additions: 0,
+					deletions: 0,
+				});
 				break;
 			case "R": {
 				// "R {old} => {new}"
@@ -66,10 +80,21 @@ export function parseJjDiffSummary(output: string): ChangedFile[] {
 				if (arrowIdx !== -1) {
 					const oldPath = rest.slice(0, arrowIdx);
 					const newPath = rest.slice(arrowIdx + 4);
-					files.push({ path: newPath, oldPath, status: "renamed", additions: 0, deletions: 0 });
+					files.push({
+						path: newPath,
+						oldPath,
+						status: "renamed",
+						additions: 0,
+						deletions: 0,
+					});
 				} else {
 					// Fallback: treat whole rest as path
-					files.push({ path: rest, status: "renamed", additions: 0, deletions: 0 });
+					files.push({
+						path: rest,
+						status: "renamed",
+						additions: 0,
+						deletions: 0,
+					});
 				}
 				break;
 			}
@@ -90,7 +115,10 @@ export function parseJjDiffSummary(output: string): ChangedFile[] {
 //   N file(s) changed, X insertions(+), Y deletions(-)
 // ---------------------------------------------------------------------------
 
-export function applyJjDiffStat(files: ChangedFile[], statOutput: string): void {
+export function applyJjDiffStat(
+	files: ChangedFile[],
+	statOutput: string,
+): void {
 	if (files.length === 0) return;
 
 	// Build a map from path → file for O(1) lookup
@@ -102,7 +130,9 @@ export function applyJjDiffStat(files: ChangedFile[], statOutput: string): void 
 
 	const lines = statOutput.split("\n");
 	// Last non-empty line is the summary — skip it
-	const dataLines = lines.filter((l) => l.trim() && !l.trim().match(/^\d+ file/));
+	const dataLines = lines.filter(
+		(l) => l.trim() && !l.trim().match(/^\d+ file/),
+	);
 
 	for (const line of dataLines) {
 		// " path/to/file | 12 +++---"
@@ -169,7 +199,14 @@ function parseJjLog(output: string): CommitInfo[] {
 		const parsed = dateStr ? new Date(dateStr) : new Date();
 		const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 
-		commits.push({ hash, shortHash, message: message || "", author: author || "", date, files: [] });
+		commits.push({
+			hash,
+			shortHash,
+			message: message || "",
+			author: author || "",
+			date,
+			files: [],
+		});
 	}
 
 	return commits;
@@ -180,7 +217,10 @@ function parseJjLog(output: string): CommitInfo[] {
 // ---------------------------------------------------------------------------
 
 function countLines(s: string): number {
-	return s.split("\n").map((l) => l.trim()).filter(Boolean).length;
+	return s
+		.split("\n")
+		.map((l) => l.trim())
+		.filter(Boolean).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,11 +257,26 @@ export async function computeJjStatus(
 		jj(repoRoot, ["diff", "--summary"]),
 		jj(repoRoot, ["diff", "--stat"]),
 		jj(repoRoot, ["log", "-r", "@", "--no-graph", "-T", "bookmarks"]),
-		jj(repoRoot, ["log", "-r", `::@ ~ ::${baseRef}`, "--no-graph", "-T", 'change_id ++ "\\n"']),
-		jj(repoRoot, ["log", "-r", `::${baseRef} ~ ::@`, "--no-graph", "-T", 'change_id ++ "\\n"']),
 		jj(repoRoot, [
 			"log",
-			"-r", `::@ ~ ::${baseRef}`,
+			"-r",
+			`::@ ~ ::${baseRef}`,
+			"--no-graph",
+			"-T",
+			'change_id ++ "\\n"',
+		]),
+		jj(repoRoot, [
+			"log",
+			"-r",
+			`::${baseRef} ~ ::@`,
+			"--no-graph",
+			"-T",
+			'change_id ++ "\\n"',
+		]),
+		jj(repoRoot, [
+			"log",
+			"-r",
+			`::@ ~ ::${baseRef}`,
 			"--no-graph",
 			"-T",
 			'commit_id ++ "|" ++ commit_id.short(7) ++ "|" ++ description.first_line() ++ "|" ++ author.name() ++ "|" ++ author.timestamp().format("%Y-%m-%dT%H:%M:%S%z") ++ "\\n"',

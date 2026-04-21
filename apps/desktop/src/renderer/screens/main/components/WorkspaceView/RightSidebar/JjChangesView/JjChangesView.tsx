@@ -474,9 +474,8 @@ export function JjChangesView({
 				title: "Abandon this change?",
 				description: (
 					<>
-						Change{" "}
-						<span className="font-mono text-foreground">{changeId}</span> will
-						be abandoned. Descendants will be rebased onto its parent. This
+						Change <span className="font-mono text-foreground">{changeId}</span>{" "}
+						will be abandoned. Descendants will be rebased onto its parent. This
 						rewrites history.
 					</>
 				),

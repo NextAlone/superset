@@ -293,14 +293,7 @@ export function createJjRouter() {
 								"-T",
 								'change_id ++ "\\n"',
 							]),
-							jj(repoRoot, [
-								"log",
-								"-r",
-								"@",
-								"--no-graph",
-								"-T",
-								"conflict",
-							]),
+							jj(repoRoot, ["log", "-r", "@", "--no-graph", "-T", "conflict"]),
 						]);
 
 						return {

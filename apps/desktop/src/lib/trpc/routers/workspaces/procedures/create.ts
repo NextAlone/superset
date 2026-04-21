@@ -21,18 +21,18 @@ import {
 	setLastActiveWorkspace,
 	touchWorkspace,
 } from "../utils/db-helpers";
+import { resolveWorktreePath } from "../utils/resolve-worktree-path";
+import { copySupersetConfigToWorktree, loadSetupConfig } from "../utils/setup";
 import {
 	createWorktreeFromPr,
 	generateBranchName,
 	getPrInfo,
 	getPrLocalBranchName,
+	getVcsProvider,
 	type PullRequestInfo,
 	parsePrUrl,
 	sanitizeBranchNameWithMaxLength,
 } from "../utils/vcs";
-import { getVcsProvider } from "../utils/vcs";
-import { resolveWorktreePath } from "../utils/resolve-worktree-path";
-import { copySupersetConfigToWorktree, loadSetupConfig } from "../utils/setup";
 import {
 	createWorkspaceFromExternalWorktree,
 	createWorkspaceFromWorktree,
@@ -846,7 +846,10 @@ export const createCreateProcedures = () => {
 
 					if (existingWorkspace) continue;
 
-					const exists = await vcsImport.workspaceExists(project.mainRepoPath, wt.path);
+					const exists = await vcsImport.workspaceExists(
+						project.mainRepoPath,
+						wt.path,
+					);
 					if (!exists) continue;
 
 					const maxTabOrder = getMaxProjectChildTabOrder(input.projectId);

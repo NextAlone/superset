@@ -7,8 +7,8 @@ import type { WorkspaceInitStep } from "shared/types/workspace-init";
 import { attemptWorkspaceAutoRenameFromPrompt } from "./ai-name";
 import { resolveWorkspaceBaseBranch } from "./base-branch";
 import { getBranchBaseConfig, setBranchBaseConfig } from "./base-branch-config";
-import { getVcsProvider, sanitizeGitError } from "./vcs";
 import { copySupersetConfigToWorktree } from "./setup";
+import { getVcsProvider, sanitizeGitError } from "./vcs";
 
 export interface WorkspaceInitParams {
 	workspaceId: string;
@@ -459,7 +459,12 @@ export async function initializeWorkspaceWorktree({
 			"creating_worktree",
 			`Creating ${vcs.type === "jj" ? "workspace" : "git worktree"}...`,
 		);
-		await vcs.createWorkspace({ mainRepoPath, branch, workspacePath: worktreePath, startPoint });
+		await vcs.createWorkspace({
+			mainRepoPath,
+			branch,
+			workspacePath: worktreePath,
+			startPoint,
+		});
 		manager.markWorktreeCreated(workspaceId);
 
 		if (manager.isCancellationRequested(workspaceId)) {

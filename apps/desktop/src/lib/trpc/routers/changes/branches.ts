@@ -51,9 +51,7 @@ export const createBranchesRouter = () => {
 						// persisted base on branch name is unreliable. Persist by
 						// path: worktrees row for git-worktree sub-paths, projects
 						// row when the path is the project's main repo.
-						const persistedBaseBranch = readPersistedJjBase(
-							input.worktreePath,
-						);
+						const persistedBaseBranch = readPersistedJjBase(input.worktreePath);
 
 						const local = bookmarks.local.map((b) => ({
 							branch: b,
@@ -227,7 +225,6 @@ export const createBranchesRouter = () => {
 			}),
 	});
 };
-
 
 async function getLocalBranchesWithDates(
 	git: SimpleGit,

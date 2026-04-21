@@ -21,9 +21,10 @@ import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
 import { useScrollContext } from "../ChangesContent";
 import { ChangesView } from "./ChangesView";
-import { JjChangesView } from "./JjChangesView";
 import { FilesView } from "./FilesView";
+import { FolderVcsPlaceholder } from "./FolderVcsPlaceholder";
 import { getSidebarHeaderTabButtonClassName } from "./headerTabStyles";
+import { JjChangesView } from "./JjChangesView";
 
 function TabButton({
 	isActive,
@@ -80,6 +81,7 @@ export function RightSidebar() {
 	);
 	const worktreePath = workspace?.worktreePath;
 	const isJj = workspace?.project?.vcsType === "jj";
+	const isFolderWorkspace = workspace?.type === "folder";
 	const currentMode = useSidebarStore((s) => s.currentMode);
 	const rightSidebarTab = useSidebarStore((s) => s.rightSidebarTab);
 	const setRightSidebarTab = useSidebarStore((s) => s.setRightSidebarTab);
@@ -229,7 +231,11 @@ export function RightSidebar() {
 							: "hidden"
 					}
 				>
-					{isJj ? (
+					{isFolderWorkspace ? (
+						<FolderVcsPlaceholder
+							projectMainRepoPath={workspace?.project?.mainRepoPath}
+						/>
+					) : isJj ? (
 						<JjChangesView
 							onFileOpen={handleFileOpen}
 							isExpandedView={isExpanded}

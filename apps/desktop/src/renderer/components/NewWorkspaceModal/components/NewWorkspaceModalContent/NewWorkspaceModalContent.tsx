@@ -1,4 +1,7 @@
+import { Button } from "@superset/ui/button";
+import { toast } from "@superset/ui/sonner";
 import { useEffect, useRef } from "react";
+import { LuGitBranch } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useNewWorkspaceModalDraft } from "../../NewWorkspaceModalDraftContext";
 import { PromptGroup } from "../PromptGroup";
@@ -78,6 +81,54 @@ export function NewWorkspaceModalContent({
 	const selectedProject = recentProjects.find(
 		(project) => project.id === draft.selectedProjectId,
 	);
+
+	const isFolderProject = !!selectedProject && !selectedProject.vcsType;
+	const initRepo = electronTrpc.projects.initGitAndOpen.useMutation();
+
+	if (isFolderProject && selectedProject) {
+		const handleInitialize = async () => {
+			try {
+				await initRepo.mutateAsync({ path: selectedProject.mainRepoPath });
+				await Promise.all([
+					utils.projects.getRecents.invalidate(),
+					utils.workspaces.get.invalidate(),
+					utils.workspaces.getAll.invalidate(),
+					utils.workspaces.getAllGrouped.invalidate(),
+				]);
+				toast.success("Repository initialized");
+			} catch (error) {
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to initialize repository",
+				);
+			}
+		};
+
+		return (
+			<div className="flex-1 overflow-y-auto">
+				<div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
+					<LuGitBranch className="size-8 opacity-40" />
+					<p className="text-sm">
+						<span className="font-medium text-foreground">
+							{selectedProject.name}
+						</span>{" "}
+						is not a git repository yet.
+					</p>
+					<p className="text-xs">
+						Initialize it (git + jj) to create workspaces and branches.
+					</p>
+					<Button
+						size="sm"
+						onClick={handleInitialize}
+						disabled={initRepo.isPending}
+					>
+						{initRepo.isPending ? "Initializing..." : "Initialize jj repo"}
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex-1 overflow-y-auto">

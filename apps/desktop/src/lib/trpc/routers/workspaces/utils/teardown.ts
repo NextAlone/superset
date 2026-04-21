@@ -7,8 +7,8 @@ import {
 } from "main/lib/agent-setup/shell-wrappers";
 import { buildSafeEnv, sanitizeEnv } from "main/lib/terminal/env";
 import { SUPERSET_DIR_NAME } from "shared/constants";
-import { getVcsProvider } from "./vcs";
 import { loadSetupConfig } from "./setup";
+import { getVcsProvider } from "./vcs";
 
 const TEARDOWN_TIMEOUT_MS = 60_000;
 

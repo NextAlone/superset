@@ -11,7 +11,6 @@ import {
 	getWorktree,
 	updateProjectDefaultBranch,
 } from "../utils/db-helpers";
-import { getVcsProvider } from "../utils/vcs";
 import {
 	clearGitHubCachesForWorktree,
 	fetchGitHubPRComments,
@@ -19,6 +18,7 @@ import {
 	type PullRequestCommentsTarget,
 	resolveReviewThread,
 } from "../utils/github";
+import { getVcsProvider } from "../utils/vcs";
 
 const gitHubPRCommentsInputSchema = z.object({
 	workspaceId: z.string(),
@@ -327,7 +327,9 @@ export const createGitStatusProcedures = () => {
 				}
 
 				const vcsExt = getVcsProvider(project.mainRepoPath);
-				const allWorktrees = await vcsExt.listExternalWorkspaces(project.mainRepoPath);
+				const allWorktrees = await vcsExt.listExternalWorkspaces(
+					project.mainRepoPath,
+				);
 
 				const trackedWorktrees = localDb
 					.select({ path: worktrees.path })

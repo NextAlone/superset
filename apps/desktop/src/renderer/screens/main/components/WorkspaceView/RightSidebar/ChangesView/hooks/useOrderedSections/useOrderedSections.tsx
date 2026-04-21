@@ -254,6 +254,7 @@ export function useOrderedSections({
 		},
 	};
 
-	return getOrderedChangeSectionIds(sectionOrder)
-		.map((section) => sectionDefinitions[section]);
+	return getOrderedChangeSectionIds(sectionOrder).map(
+		(section) => sectionDefinitions[section],
+	);
 }

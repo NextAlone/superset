@@ -44,8 +44,8 @@ export function DestroyConfirmPane({
 						Delete workspace "{workspaceName}"?
 					</AlertDialogTitle>
 					<AlertDialogDescription>
-						This removes the {isJj ? "workspace" : "worktree"} from disk. The cloud workspace record will
-						also be removed.
+						This removes the {isJj ? "workspace" : "worktree"} from disk. The
+						cloud workspace record will also be removed.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<div className="px-4 pb-2">

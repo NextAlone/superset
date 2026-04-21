@@ -27,9 +27,7 @@ export function useOpenProject() {
 		(pending: PendingGitInit) => {
 			pendingRef.current = pending;
 
-			const finish = async (
-				run: (path: string) => Promise<Project | null>,
-			) => {
+			const finish = async (run: (path: string) => Promise<Project | null>) => {
 				const p = pendingRef.current;
 				if (!p) return;
 

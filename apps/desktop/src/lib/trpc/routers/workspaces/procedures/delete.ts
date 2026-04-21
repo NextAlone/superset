@@ -20,8 +20,8 @@ import {
 	markWorkspaceAsDeleting,
 	updateActiveWorkspaceIfRemoved,
 } from "../utils/db-helpers";
-import { getVcsProvider } from "../utils/vcs";
 import { removeWorktreeFromDisk, runTeardown } from "../utils/teardown";
+import { getVcsProvider } from "../utils/vcs";
 
 const normalizePath = (p: string): string => {
 	try {
