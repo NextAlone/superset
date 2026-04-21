@@ -181,7 +181,7 @@ export type AgentCustomDefinition = z.infer<typeof agentCustomDefinitionSchema>;
 /**
  * Workspace type
  */
-export const workspaceTypeSchema = z.enum(["worktree", "branch"]);
+export const workspaceTypeSchema = z.enum(["worktree", "branch", "folder"]);
 
 export type WorkspaceType = z.infer<typeof workspaceTypeSchema>;
 

@@ -109,7 +109,8 @@ export const workspaces = sqliteTable(
 			onDelete: "cascade",
 		}), // Only set for type="worktree"
 		type: text("type").notNull().$type<WorkspaceType>(),
-		branch: text("branch").notNull(), // Branch name for both types
+		// Null for type="folder" (no VCS). Set for "branch" and "worktree".
+		branch: text("branch"),
 		name: text("name").notNull(),
 		tabOrder: integer("tab_order").notNull(),
 		createdAt: integer("created_at")

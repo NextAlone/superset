@@ -288,6 +288,13 @@
       "when": 1776556800000,
       "tag": "0040_add_vcs_type_to_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1776776428315,
+      "tag": "0041_workspace_type_folder",
+      "breakpoints": true
     }
   ]
 }
