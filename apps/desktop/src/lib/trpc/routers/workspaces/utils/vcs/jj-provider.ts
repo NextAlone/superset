@@ -5,6 +5,7 @@ import { mkdir, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { jj } from "../../../changes/utils/jj-cli";
+import { execGitWithShellPath } from "../git-client";
 import { execWithShellEnv } from "../shell-env";
 import type {
 	BranchExistsOnRemoteResult,
@@ -14,7 +15,7 @@ import type {
 } from "./types";
 
 async function git(repoPath: string, args: string[]): Promise<string> {
-	const { stdout } = await execWithShellEnv("git", args, { cwd: repoPath });
+	const { stdout } = await execGitWithShellPath(args, { cwd: repoPath });
 	return stdout.trim();
 }
 

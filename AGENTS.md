@@ -1,5 +1,9 @@
 # Superset Monorepo Guide
 
+## Question Tool
+
+When you need to ask the user ANY question — including simple yes/no, confirmations, and clarifications — ALWAYS use the `ask_user` tool. Never ask questions in plain text. The Superset UI renders `ask_user` calls as an interactive overlay with clickable option buttons; plain-text questions will not be surfaced to the user in the same way.
+
 Guidelines for agents and developers working in this repository.
 
 ## Structure
@@ -72,8 +76,7 @@ bun run clean:workspaces   # Clean all workspace node_modules
 3. **Shared command source** - keep command definitions in `.agents/commands/` only. `.claude/commands` and `.cursor/commands` should be symlinks to `../.agents/commands`. (`packages/chat` discovers slash commands from `.claude/commands`.)
 4. **Workspace MCP config** - keep shared MCP servers in `.mcp.json`; `.cursor/mcp.json` should link to `../.mcp.json`. Codex uses `.codex/config.toml` (run with `CODEX_HOME=.codex codex ...`). OpenCode uses `opencode.json` and should mirror the same MCP set using OpenCode's `remote`/`local` schema.
 5. **Mastra dependencies** - use the published upstream `mastracode` and `@mastra/*` packages. Do not add fork tarball overrides or custom patch steps unless explicitly requested.
-6. **Package age security policy** - global `npm`, `bun`, `pnpm`, and `uv` configs enforce a 7-day minimum release age, and `npm` also has `ignore-scripts=true`. If package install/update/add commands fail because a version is too new or a lifecycle script is blocked, do not keep retrying, disable the policy, or suggest bypass flags. Choose an older version that satisfies the policy, or stop and surface the blocked dependency clearly.
-7. **Plan & doc placement** - implementation plans go in `plans/` (cross-cutting) or `apps/<app>/plans/` (app-scoped); shipped plans move to `plans/done/`. Architecture/reference docs go in `<app>/docs/`. Never drop `*_PLAN.md` at an app root or inside `src/`.
+6. **Plan & doc placement** - implementation plans go in `plans/` (cross-cutting) or `apps/<app>/plans/` (app-scoped); shipped plans move to `plans/done/`. Architecture/reference docs go in `<app>/docs/`. Never drop `*_PLAN.md` at an app root or inside `src/`.
 
 
 ---

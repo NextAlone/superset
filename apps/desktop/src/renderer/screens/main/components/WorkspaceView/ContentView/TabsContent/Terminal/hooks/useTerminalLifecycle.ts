@@ -22,7 +22,6 @@ import {
 	setupCopyHandler,
 	setupFocusListener,
 	setupKeyboardHandler,
-	setupPasteHandler,
 } from "../helpers";
 import { isPaneDestroyed } from "../pane-guards";
 import { coldRestoreState, pendingDetaches } from "../state";
@@ -128,7 +127,6 @@ export interface UseTerminalLifecycleOptions {
 	flushPendingEvents: () => void;
 	resetModes: () => void;
 	isAlternateScreenRef: MutableRefObject<boolean>;
-	isBracketedPasteRef: MutableRefObject<boolean>;
 	setPaneNameRef: MutableRefObject<(paneId: string, name: string) => void>;
 	renameUnnamedWorkspaceRef: MutableRefObject<(title: string) => void>;
 	handleTerminalFocusRef: MutableRefObject<() => void>;
@@ -190,7 +188,6 @@ export function useTerminalLifecycle({
 	flushPendingEvents,
 	resetModes,
 	isAlternateScreenRef,
-	isBracketedPasteRef,
 	setPaneNameRef,
 	renameUnnamedWorkspaceRef,
 	handleTerminalFocusRef,
@@ -259,6 +256,17 @@ export function useTerminalLifecycle({
 		});
 
 		const { xterm, fitAddon, searchAddon } = cached;
+
+		// Called after createOrAttach resolves: re-fit against the now-settled
+		// container and push dims to the backend. Guards against stale sizes
+		// from attachToContainer's fit running before flex layout resolved
+		// (e.g. preset tabs, new workspace bulk creation). Mirrors v2's
+		// terminal-ws-transport sendResize-on-open.
+		const syncBackendDimensions = () => {
+			if (container.clientWidth === 0 || container.clientHeight === 0) return;
+			fitAddon.fit();
+			resizeRef.current({ paneId, cols: xterm.cols, rows: xterm.rows });
+		};
 
 		// Attach the wrapper div to the live container.
 		// The cache creates a ResizeObserver that calls fitAddon.fit() and
@@ -383,6 +391,7 @@ export function useTerminalLifecycle({
 									return;
 								}
 								setConnectionError(null);
+								syncBackendDimensions();
 								pendingInitialStateRef.current = result;
 								maybeApplyInitialState();
 								if (!command) {
@@ -673,6 +682,7 @@ export function useTerminalLifecycle({
 									v1TerminalCache.startStream(paneId);
 									v1TerminalCache.setStreamReady(paneId);
 									markTerminalSessionReady(paneId);
+									syncBackendDimensions();
 
 									const storedColdRestore = coldRestoreState.get(paneId);
 									if (storedColdRestore?.isRestored) {
@@ -854,13 +864,6 @@ export function useTerminalLifecycle({
 		const cleanupFocus = setupFocusListener(xterm, () =>
 			handleTerminalFocusRef.current(),
 		);
-		const cleanupPaste = setupPasteHandler(xterm, {
-			onPaste: (text) => {
-				commandBufferRef.current += text;
-			},
-			onWrite: handleWrite,
-			isBracketedPasteEnabled: () => isBracketedPasteRef.current,
-		});
 		const cleanupCopy = setupCopyHandler(xterm);
 
 		const isPaneDestroyedInStore = () =>
@@ -892,7 +895,6 @@ export function useTerminalLifecycle({
 			cleanupKeyboard();
 			cleanupClickToMove();
 			cleanupFocus?.();
-			cleanupPaste();
 			cleanupCopy();
 			unregisterClearCallbackRef.current(paneId);
 			unregisterScrollToBottomCallbackRef.current(paneId);

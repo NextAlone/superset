@@ -10,6 +10,7 @@ const GC_TIME_MS = 30 * 60 * 1_000;
 export interface WorkspaceClientContextValue {
 	hostUrl: string;
 	queryClient: QueryClient;
+	trpcClient: ReturnType<typeof workspaceTrpc.createClient>;
 	getWsToken: () => string | null;
 }
 
@@ -87,6 +88,7 @@ export function WorkspaceClientProvider({
 	const contextValue: WorkspaceClientContextValue = {
 		hostUrl: clients.hostUrl,
 		queryClient: clients.queryClient,
+		trpcClient: clients.trpcClient,
 		getWsToken: clients.getWsToken,
 	};
 
@@ -124,7 +126,7 @@ export function useWorkspaceWsUrl(
 	params?: Record<string, string>,
 ): string {
 	const { hostUrl, getWsToken } = useWorkspaceClient();
-	const url = new URL(path, hostUrl);
+	const url = new URL(`${hostUrl}${path}`);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 	if (params) {
 		for (const [key, value] of Object.entries(params)) {

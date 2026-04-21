@@ -28,9 +28,12 @@ import { useHotkeyDisplay } from "renderer/hotkeys";
 import { terminalRuntimeRegistry } from "renderer/lib/terminal/terminal-runtime-registry";
 import { FileIcon } from "renderer/screens/main/components/WorkspaceView/RightSidebar/FilesView/utils";
 import { useSettings } from "renderer/stores/settings";
+import {
+	getDocument,
+	useSharedFileDocument,
+} from "../../state/fileDocumentStore";
 import type {
 	BrowserPaneData,
-	ChatPaneData,
 	CommentPaneData,
 	DevtoolsPaneData,
 	FilePaneData,
@@ -42,14 +45,39 @@ import {
 	BrowserPaneToolbar,
 	browserRuntimeRegistry,
 } from "./components/BrowserPane";
-import { ChatPane } from "./components/ChatPane";
 import { CommentPane } from "./components/CommentPane";
 import { DiffPane } from "./components/DiffPane";
 import { FilePane } from "./components/FilePane";
+import { FilePaneHeaderExtras } from "./components/FilePane/components/FilePaneHeaderExtras";
 import { TerminalPane } from "./components/TerminalPane";
 
 function getFileName(filePath: string): string {
 	return filePath.split("/").pop() ?? filePath;
+}
+
+function FilePaneTabTitle({
+	filePath,
+	pinned,
+	workspaceId,
+}: {
+	filePath: string;
+	pinned: boolean;
+	workspaceId: string;
+}) {
+	const document = useSharedFileDocument({
+		workspaceId,
+		absolutePath: filePath,
+	});
+	const name = getFileName(filePath);
+	return (
+		<div className="flex items-center space-x-2">
+			<FileIcon fileName={name} className="size-4 shrink-0" />
+			<span className={pinned ? undefined : "italic"}>{name}</span>
+			{document.dirty && (
+				<Circle className="size-2 shrink-0 fill-current text-muted-foreground" />
+			)}
+		</div>
+	);
 }
 
 const MOD_KEY = navigator.platform.toLowerCase().includes("mac")
@@ -110,8 +138,14 @@ function DiffViewModeToggle() {
 	);
 }
 
+interface UsePaneRegistryOptions {
+	onOpenFile: (path: string, openInNewTab?: boolean) => void;
+	onRevealPath: (path: string) => void;
+}
+
 export function usePaneRegistry(
 	workspaceId: string,
+	{ onOpenFile, onRevealPath }: UsePaneRegistryOptions,
 ): PaneRegistry<PaneViewerData> {
 	const clearShortcut = useHotkeyDisplay("CLEAR_TERMINAL").text;
 	const scrollToBottomShortcut = useHotkeyDisplay("SCROLL_TO_BOTTOM").text;
@@ -127,26 +161,26 @@ export function usePaneRegistry(
 				getTitle: (pane) => getFileName((pane.data as FilePaneData).filePath),
 				renderTitle: (ctx: RendererContext<PaneViewerData>) => {
 					const data = ctx.pane.data as FilePaneData;
-					const name = getFileName(data.filePath);
 					return (
-						<div className="flex items-center space-x-2">
-							<span className={ctx.pane.pinned ? undefined : "italic"}>
-								{name}
-							</span>
-							{data.hasChanges && (
-								<Circle className="size-2 shrink-0 fill-current text-muted-foreground" />
-							)}
-						</div>
+						<FilePaneTabTitle
+							filePath={data.filePath}
+							pinned={Boolean(ctx.pane.pinned)}
+							workspaceId={workspaceId}
+						/>
 					);
 				},
 				renderPane: (ctx: RendererContext<PaneViewerData>) => (
 					<FilePane context={ctx} workspaceId={workspaceId} />
 				),
+				renderHeaderExtras: (ctx: RendererContext<PaneViewerData>) => (
+					<FilePaneHeaderExtras context={ctx} workspaceId={workspaceId} />
+				),
 				onHeaderClick: (ctx: RendererContext<PaneViewerData>) =>
 					ctx.actions.pin(),
 				onBeforeClose: (pane) => {
 					const data = pane.data as FilePaneData;
-					if (!data.hasChanges) return true;
+					const doc = getDocument(workspaceId, data.filePath);
+					if (!doc?.dirty) return true;
 					const name = data.filePath.split("/").pop();
 					return new Promise<boolean>((resolve) => {
 						alert({
@@ -155,15 +189,27 @@ export function usePaneRegistry(
 							actions: [
 								{
 									label: "Save",
-									onClick: () => {
-										// TODO: wire up save via editor ref
-										resolve(true);
+									onClick: async () => {
+										const doc = getDocument(workspaceId, data.filePath);
+										if (!doc) {
+											resolve(true);
+											return;
+										}
+										const result = await doc.save();
+										// Only proceed to close if the save succeeded; otherwise
+										// leave the pane open so the user can see the conflict /
+										// error state and retry.
+										resolve(result.status === "saved");
 									},
 								},
 								{
 									label: "Don't Save",
 									variant: "secondary",
-									onClick: () => resolve(true),
+									onClick: async () => {
+										const doc = getDocument(workspaceId, data.filePath);
+										if (doc) await doc.reload();
+										resolve(true);
+									},
 								},
 								{
 									label: "Cancel",
@@ -195,7 +241,12 @@ export function usePaneRegistry(
 				getIcon: () => <TerminalSquare className="size-4" />,
 				getTitle: () => "Terminal",
 				renderPane: (ctx: RendererContext<PaneViewerData>) => (
-					<TerminalPane ctx={ctx} workspaceId={workspaceId} />
+					<TerminalPane
+						ctx={ctx}
+						workspaceId={workspaceId}
+						onOpenFile={onOpenFile}
+						onRevealPath={onRevealPath}
+					/>
 				),
 				contextMenuActions: (_ctx, defaults) => {
 					const terminalActions: ContextMenuActionConfig<PaneViewerData>[] = [
@@ -292,28 +343,13 @@ export function usePaneRegistry(
 			chat: {
 				getIcon: () => <MessageSquare className="size-4" />,
 				getTitle: () => "Chat",
-				renderPane: (ctx: RendererContext<PaneViewerData>) => {
-					const data = ctx.pane.data as ChatPaneData;
-					return (
-						<ChatPane
-							onSessionIdChange={(sessionId) =>
-								ctx.actions.updateData({
-									sessionId,
-									launchConfig: data.launchConfig ?? null,
-								} as PaneViewerData)
-							}
-							sessionId={data.sessionId}
-							workspaceId={workspaceId}
-							initialLaunchConfig={data.launchConfig ?? null}
-							onConsumeLaunchConfig={() =>
-								ctx.actions.updateData({
-									sessionId: data.sessionId,
-									launchConfig: null,
-								} as PaneViewerData)
-							}
-						/>
-					);
-				},
+				// Disabled until ChatServiceProvider is wired above v2 panes —
+				// TiptapPromptEditor needs its tRPC context.
+				renderPane: (_ctx: RendererContext<PaneViewerData>) => (
+					<div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
+						Chat pane is temporarily disabled.
+					</div>
+				),
 				contextMenuActions: (_ctx, defaults) =>
 					defaults.map((d) =>
 						d.key === "close-pane" ? { ...d, label: "Close Chat" } : d,
@@ -369,6 +405,12 @@ export function usePaneRegistry(
 				},
 			},
 		}),
-		[workspaceId, clearShortcut, scrollToBottomShortcut],
+		[
+			workspaceId,
+			clearShortcut,
+			scrollToBottomShortcut,
+			onOpenFile,
+			onRevealPath,
+		],
 	);
 }

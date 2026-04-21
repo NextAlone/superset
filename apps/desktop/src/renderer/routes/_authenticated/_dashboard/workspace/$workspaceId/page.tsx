@@ -301,7 +301,6 @@ function WorkspacePage() {
 			});
 		}
 	}, [workspace?.worktreePath, resolvedDefaultApp, mutateOpenInApp, projectId]);
-	useHotkey("OPEN_IN_APP", handleOpenInApp);
 
 	// Copy path shortcut
 	const { copyToClipboard } = useCopyToClipboard();
@@ -331,8 +330,8 @@ function WorkspacePage() {
 	// Toggle changes sidebar (⌘L)
 	useHotkey("TOGGLE_SIDEBAR", () => toggleSidebar());
 
-	// Toggle expand/collapse sidebar (⌘⇧L)
-	useHotkey("TOGGLE_EXPAND_SIDEBAR", () => {
+	// Open diff viewer (⌘⇧L)
+	useHotkey("OPEN_DIFF_VIEWER", () => {
 		if (!isSidebarOpen) {
 			setSidebarOpen(true);
 			setSidebarMode(SidebarMode.Changes);

@@ -9,7 +9,7 @@ import { workspaceTrpc } from "@superset/workspace-client";
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
 import { TbLayoutColumns, TbLayoutRows } from "react-icons/tb";
 import { HotkeyLabel, useHotkey } from "renderer/hotkeys";
@@ -25,6 +25,7 @@ import { AddTabMenu } from "./components/AddTabMenu";
 import { V2PresetsBar } from "./components/V2PresetsBar";
 import { WorkspaceEmptyState } from "./components/WorkspaceEmptyState";
 import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
+import { useConsumeAutomationRunLink } from "./hooks/useConsumeAutomationRunLink";
 import { useConsumePendingLaunch } from "./hooks/useConsumePendingLaunch";
 import { useDefaultContextMenuActions } from "./hooks/useDefaultContextMenuActions";
 import { usePaneRegistry } from "./hooks/usePaneRegistry";
@@ -33,6 +34,10 @@ import { useRecentlyViewedFiles } from "./hooks/useRecentlyViewedFiles";
 import { useV2PresetExecution } from "./hooks/useV2PresetExecution";
 import { useV2WorkspacePaneLayout } from "./hooks/useV2WorkspacePaneLayout";
 import { useWorkspaceHotkeys } from "./hooks/useWorkspaceHotkeys";
+import {
+	FileDocumentStoreProvider,
+	getDocument,
+} from "./state/fileDocumentStore";
 import type {
 	BrowserPaneData,
 	ChatPaneData,
@@ -43,14 +48,25 @@ import type {
 	TerminalPaneData,
 } from "./types";
 
+interface WorkspaceSearch {
+	terminalId?: string;
+	chatSessionId?: string;
+}
+
 export const Route = createFileRoute(
 	"/_authenticated/_dashboard/v2-workspace/$workspaceId/",
 )({
 	component: V2WorkspacePage,
+	validateSearch: (raw: Record<string, unknown>): WorkspaceSearch => ({
+		terminalId: typeof raw.terminalId === "string" ? raw.terminalId : undefined,
+		chatSessionId:
+			typeof raw.chatSessionId === "string" ? raw.chatSessionId : undefined,
+	}),
 });
 
 function V2WorkspacePage() {
 	const { workspaceId } = Route.useParams();
+	const { terminalId, chatSessionId } = Route.useSearch();
 	const collections = useCollections();
 
 	const { data: workspaces } = useLiveQuery(
@@ -75,6 +91,8 @@ function V2WorkspacePage() {
 			projectId={workspace.projectId}
 			workspaceId={workspace.id}
 			workspaceName={workspace.name}
+			terminalId={terminalId}
+			chatSessionId={chatSessionId}
 		/>
 	);
 }
@@ -83,11 +101,16 @@ function WorkspaceContent({
 	projectId,
 	workspaceId,
 	workspaceName,
+	terminalId,
+	chatSessionId,
 }: {
 	projectId: string;
 	workspaceId: string;
 	workspaceName: string;
+	terminalId?: string;
+	chatSessionId?: string;
 }) {
+	const collections = useCollections();
 	const { localWorkspaceState, store } = useV2WorkspacePaneLayout({
 		projectId,
 		workspaceId,
@@ -98,8 +121,7 @@ function WorkspaceContent({
 		projectId,
 	});
 	useConsumePendingLaunch({ workspaceId, store });
-	const paneRegistry = usePaneRegistry(workspaceId);
-	const defaultContextMenuActions = useDefaultContextMenuActions(paneRegistry);
+	useConsumeAutomationRunLink({ store, terminalId, chatSessionId });
 
 	const workspaceQuery = workspaceTrpc.workspace.get.useQuery({
 		id: workspaceId,
@@ -108,13 +130,23 @@ function WorkspaceContent({
 
 	const { recentFiles, recordView } = useRecentlyViewedFiles(workspaceId);
 
-	const selectedFilePath = useStore(store, (s) => {
+	const activeFilePanePath = useStore(store, (s) => {
 		const tab = s.tabs.find((t) => t.id === s.activeTabId);
 		if (!tab?.activePaneId) return undefined;
 		const pane = tab.panes[tab.activePaneId];
 		if (pane?.kind === "file") return (pane.data as FilePaneData).filePath;
 		return undefined;
 	});
+
+	const [selectedFilePath, setSelectedFilePath] = useState<string | undefined>(
+		activeFilePanePath,
+	);
+
+	useEffect(() => {
+		if (activeFilePanePath !== undefined) {
+			setSelectedFilePath(activeFilePanePath);
+		}
+	}, [activeFilePanePath]);
 
 	const openFilePathsKey = useStore(store, (s) =>
 		s.tabs
@@ -148,7 +180,6 @@ function WorkspaceContent({
 							data: {
 								filePath,
 								mode: "editor",
-								hasChanges: false,
 							} as FilePaneData,
 						},
 					],
@@ -169,13 +200,29 @@ function WorkspaceContent({
 					data: {
 						filePath,
 						mode: "editor",
-						hasChanges: false,
 					} as FilePaneData,
 				},
 			});
 		},
 		[store, worktreePath, recordView],
 	);
+
+	const revealPath = useCallback(
+		(path: string) => {
+			collections.v2WorkspaceLocalState.update(workspaceId, (draft) => {
+				draft.rightSidebarOpen = true;
+				draft.sidebarState.activeTab = "files";
+			});
+			setSelectedFilePath(path);
+		},
+		[collections, workspaceId],
+	);
+
+	const paneRegistry = usePaneRegistry(workspaceId, {
+		onOpenFile: openFilePane,
+		onRevealPath: revealPath,
+	});
+	const defaultContextMenuActions = useDefaultContextMenuActions(paneRegistry);
 
 	const openDiffPane = useCallback(
 		(filePath: string) => {
@@ -303,7 +350,7 @@ function WorkspaceContent({
 			{
 				key: "close",
 				icon: <HiMiniXMark className="size-3.5" />,
-				tooltip: <HotkeyLabel label="Close pane" id="CLOSE_TERMINAL" />,
+				tooltip: <HotkeyLabel label="Close pane" id="CLOSE_PANE" />,
 				onClick: (ctx) => ctx.actions.close(),
 			},
 		],
@@ -312,11 +359,17 @@ function WorkspaceContent({
 
 	const sidebarOpen = localWorkspaceState?.rightSidebarOpen ?? false;
 
-	useWorkspaceHotkeys({ store, workspaceId, matchedPresets, executePreset });
+	useWorkspaceHotkeys({
+		store,
+		workspaceId,
+		matchedPresets,
+		executePreset,
+		paneRegistry,
+	});
 	useHotkey("QUICK_OPEN", handleQuickOpen);
 
 	return (
-		<>
+		<FileDocumentStoreProvider workspaceId={workspaceId}>
 			<ResizablePanelGroup direction="horizontal" className="flex-1">
 				<ResizablePanel defaultSize={80} minSize={30}>
 					<div
@@ -350,19 +403,19 @@ function WorkspaceContent({
 								/>
 							)}
 							onBeforeCloseTab={(tab) => {
-								const dirtyFiles = Object.values(tab.panes)
-									.filter(
-										(p) =>
-											p.kind === "file" && (p.data as FilePaneData).hasChanges,
-									)
-									.map((p) =>
-										(p.data as FilePaneData).filePath.split("/").pop(),
-									);
-								if (dirtyFiles.length === 0) return true;
+								const dirtyPanes = Object.values(tab.panes).filter((p) => {
+									if (p.kind !== "file") return false;
+									const filePath = (p.data as FilePaneData).filePath;
+									return getDocument(workspaceId, filePath)?.dirty === true;
+								});
+								const dirtyFileNames = dirtyPanes.map((p) =>
+									(p.data as FilePaneData).filePath.split("/").pop(),
+								);
+								if (dirtyPanes.length === 0) return true;
 								const title =
-									dirtyFiles.length === 1
-										? `Do you want to save the changes you made to ${dirtyFiles[0]}?`
-										: `Do you want to save changes to ${dirtyFiles.length} files?`;
+									dirtyPanes.length === 1
+										? `Do you want to save the changes you made to ${dirtyFileNames[0]}?`
+										: `Do you want to save changes to ${dirtyPanes.length} files?`;
 								return new Promise<boolean>((resolve) => {
 									alert({
 										title,
@@ -371,15 +424,33 @@ function WorkspaceContent({
 										actions: [
 											{
 												label: "Save All",
-												onClick: () => {
-													// TODO: wire up save via editor refs
+												onClick: async () => {
+													for (const pane of dirtyPanes) {
+														const filePath = (pane.data as FilePaneData)
+															.filePath;
+														const doc = getDocument(workspaceId, filePath);
+														if (!doc) continue;
+														const result = await doc.save();
+														if (result.status !== "saved") {
+															resolve(false);
+															return;
+														}
+													}
 													resolve(true);
 												},
 											},
 											{
 												label: "Don't Save",
 												variant: "secondary",
-												onClick: () => resolve(true),
+												onClick: async () => {
+													for (const pane of dirtyPanes) {
+														const filePath = (pane.data as FilePaneData)
+															.filePath;
+														const doc = getDocument(workspaceId, filePath);
+														if (doc) await doc.reload();
+													}
+													resolve(true);
+												},
 											},
 											{
 												label: "Cancel",
@@ -420,6 +491,6 @@ function WorkspaceContent({
 				recentlyViewedFiles={recentFiles}
 				openFilePaths={openFilePaths}
 			/>
-		</>
+		</FileDocumentStoreProvider>
 	);
 }

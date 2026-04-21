@@ -2,6 +2,7 @@ import type { AppRouter } from "@superset/host-service";
 import { workspaceTrpc } from "@superset/workspace-client";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { hasAnsweredQuestionToolCall } from "renderer/components/Chat/ChatInterface/utils/messageHelpers";
 
 interface UseChatDisplayOptions {
 	sessionId: string | null;
@@ -73,7 +74,10 @@ function withoutActiveTurnAssistantHistory({
 	const previousTurns = messages.slice(0, turnStartIndex);
 	const activeTurnNonAssistant = messages
 		.slice(turnStartIndex)
-		.filter((message) => message.role !== "assistant");
+		.filter(
+			(message) =>
+				message.role !== "assistant" || hasAnsweredQuestionToolCall(message),
+		);
 
 	return [...previousTurns, ...activeTurnNonAssistant];
 }
@@ -107,8 +111,7 @@ function getLegacyImagePayload(
 }
 
 export function useChatDisplay(options: UseChatDisplayOptions) {
-	const { sessionId, workspaceId, enabled = true, fps = 60 } = options;
-	const utils = workspaceTrpc.useUtils();
+	const { sessionId, workspaceId, enabled = true, fps = 4 } = options;
 	const [commandError, setCommandError] = useState<unknown>(null);
 	const queryInput =
 		sessionId === null ? undefined : { sessionId, workspaceId };
@@ -119,8 +122,6 @@ export function useChatDisplay(options: UseChatDisplayOptions) {
 		refetchInterval: refetchIntervalMs,
 		refetchIntervalInBackground: true,
 		refetchOnWindowFocus: false,
-		staleTime: 0,
-		gcTime: 0,
 	} as const;
 
 	const displayQuery = workspaceTrpc.chat.getDisplayState.useQuery(
@@ -350,20 +351,6 @@ export function useChatDisplay(options: UseChatDisplayOptions) {
 			workspaceId,
 		],
 	);
-
-	useEffect(() => {
-		if (!queryInput) return;
-		if (!isRunning) return;
-		void Promise.all([
-			utils.chat.getDisplayState.invalidate(queryInput),
-			utils.chat.listMessages.invalidate(queryInput),
-		]);
-	}, [
-		isRunning,
-		queryInput,
-		utils.chat.getDisplayState,
-		utils.chat.listMessages,
-	]);
 
 	return {
 		...displayState,

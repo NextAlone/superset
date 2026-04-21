@@ -246,10 +246,7 @@ async function ensureMainWorkspace(project: Project): Promise<void> {
 	localDb
 		.delete(workspaces)
 		.where(
-			and(
-				eq(workspaces.projectId, project.id),
-				eq(workspaces.type, "folder"),
-			),
+			and(eq(workspaces.projectId, project.id), eq(workspaces.type, "folder")),
 		)
 		.run();
 

@@ -259,7 +259,7 @@ step_start_electric() {
 
   if ! docker run -d \
       --name "$ELECTRIC_CONTAINER" \
-      --restart unless-stopped \
+      --restart on-failure:5 \
       $port_flag \
       -e DATABASE_URL="$DIRECT_URL" \
       -e ELECTRIC_SECRET="$ELECTRIC_SECRET" \
@@ -472,6 +472,7 @@ step_write_env() {
     write_env_var "EXPO_PUBLIC_WEB_URL" "http://localhost:$WEB_PORT"
     write_env_var "EXPO_PUBLIC_API_URL" "http://localhost:$API_PORT"
     write_env_var "RELAY_URL" "http://localhost:$RELAY_PORT"
+    write_env_var "SUPERSET_WEB_URL" "http://localhost:$WEB_PORT"
     echo ""
     echo "# Streams URLs (overrides from root .env)"
     write_env_var "PORT" "$STREAMS_PORT"
