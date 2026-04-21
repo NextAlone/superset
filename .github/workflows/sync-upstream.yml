@@ -32,7 +32,9 @@ jobs:
       - name: Fetch upstream
         run: |
           git remote add upstream "$UPSTREAM_URL"
-          git fetch upstream "$UPSTREAM_BRANCH" --tags
+          # --force lets rolling tags like `desktop-canary` move forward instead
+          # of being rejected with "would clobber existing tag".
+          git fetch upstream "$UPSTREAM_BRANCH" --tags --force
 
       - name: Fast-forward main from upstream
         run: |
