@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	VscCheck,
 	VscChevronRight,
+	VscClose,
 	VscDiscard,
 	VscRefresh,
 	VscWarning,
@@ -30,6 +31,7 @@ import { ConflictEditor } from "./components/ConflictEditor";
 import { CurrentBookmarkMenu } from "./components/CurrentBookmarkMenu";
 import { JjBaseBookmarkSelector } from "./components/JjBaseBookmarkSelector";
 import { RevisionDag } from "./components/RevisionDag";
+import type { DagNode } from "./components/RevisionDag/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,10 +65,21 @@ export function JjChangesView({
 	// ---- Local UI state ---------------------------------------------------
 	const [description, setDescription] = useState("");
 	const [sections, setSections] = useState({
-		changes: true,
-		againstBase: true,
+		changes: false,
+		againstBase: false,
 		history: true,
+		selectedHistory: true,
 	});
+
+	// Selected historical change (clicked in DAG). `null` = none selected.
+	const [selectedHistory, setSelectedHistory] = useState<{
+		changeId: string;
+		commitId: string;
+		shortCommitId: string;
+		description: string;
+		author: string;
+		timestamp: string;
+	} | null>(null);
 
 	const descriptionRef = useRef<HTMLTextAreaElement>(null);
 	const lastSyncedDesc = useRef("");
@@ -131,9 +144,35 @@ export function JjChangesView({
 		onError: (err) => toast.error(`Discard all failed: ${err.message}`),
 	});
 
+	const pendingEditChangeIdRef = useRef<string | null>(null);
+
 	const editMutation = electronTrpc.changes.jjEdit.useMutation({
 		onSuccess: () => refetch(),
-		onError: (err) => toast.error(`Edit failed: ${err.message}`),
+		onError: (err) => {
+			const changeId = pendingEditChangeIdRef.current;
+			if (changeId && /is immutable/i.test(err.message)) {
+				setConfirmRequest({
+					title: "Commit is immutable",
+					description: (
+						<>
+							Change{" "}
+							<span className="font-mono text-foreground">{changeId}</span> is
+							part of shared history and can't be edited in place. Create a new
+							change on top of it instead?
+						</>
+					),
+					confirmLabel: "Create new change",
+					destructive: false,
+					onConfirm: () => {
+						if (!worktreePath) return;
+						newMutation.mutate({ worktreePath, changeId });
+						setConfirmRequest(null);
+					},
+				});
+				return;
+			}
+			toast.error(`Edit failed: ${err.message}`);
+		},
 	});
 
 	const newMutation = electronTrpc.changes.jjNew.useMutation({
@@ -259,6 +298,29 @@ export function JjChangesView({
 		{ enabled: !!worktreePath, refetchInterval: 2500 },
 	);
 
+	// ---- Selected-history files query -------------------------------------
+	const selectedHistoryFilesQuery =
+		electronTrpc.changes.getCommitFiles.useQuery(
+			{
+				worktreePath: worktreePath ?? "",
+				commitHash: selectedHistory?.commitId ?? "",
+			},
+			{
+				enabled: !!worktreePath && !!selectedHistory?.commitId,
+				staleTime: 10_000,
+			},
+		);
+
+	// Drop selection if the change vanishes from the DAG (abandoned / rebased-away).
+	useEffect(() => {
+		if (!selectedHistory) return;
+		const nodes = dagQuery.data?.nodes ?? [];
+		if (nodes.length === 0) return;
+		if (!nodes.some((n) => n.changeId === selectedHistory.changeId)) {
+			setSelectedHistory(null);
+		}
+	}, [dagQuery.data, selectedHistory]);
+
 	// ---- Sync description from server → local state -----------------------
 	useEffect(() => {
 		if (changeStatus && changeStatus.description !== lastSyncedDesc.current) {
@@ -311,6 +373,7 @@ export function JjChangesView({
 	const handleEdit = useCallback(
 		(changeId: string) => {
 			if (!worktreePath) return;
+			pendingEditChangeIdRef.current = changeId;
 			editMutation.mutate({ worktreePath, changeId });
 		},
 		[worktreePath, editMutation],
@@ -522,7 +585,7 @@ export function JjChangesView({
 	);
 
 	const handleFileSelect = useCallback(
-		(file: ChangedFile, category: ChangeCategory) => {
+		(file: ChangedFile, category: ChangeCategory, commitHash?: string) => {
 			if (!workspaceId || !worktreePath) return;
 			if (conflictPathSet.has(file.path)) {
 				setConflictEditorInitialPath(file.path);
@@ -534,12 +597,32 @@ export function JjChangesView({
 				toAbsoluteWorkspacePath(worktreePath, file.path),
 				file,
 				category,
-				null,
+				commitHash ?? null,
 			);
-			onFileOpen?.(file, category);
+			onFileOpen?.(file, category, commitHash);
 		},
 		[workspaceId, worktreePath, conflictPathSet, selectFile, onFileOpen],
 	);
+
+	const handleSelectHistoryChange = useCallback((node: DagNode) => {
+		if (node.isWorkingCopy) {
+			// @ already covered by "Changes" / "Against Base". Clear selection.
+			setSelectedHistory(null);
+			return;
+		}
+		setSelectedHistory((prev) =>
+			prev?.changeId === node.changeId
+				? null
+				: {
+						changeId: node.changeId,
+						commitId: node.commitId,
+						shortCommitId: node.shortCommitId,
+						description: node.description,
+						author: node.author,
+						timestamp: node.timestamp,
+					},
+		);
+	}, []);
 
 	const toggleSection = useCallback(
 		(key: keyof typeof sections) =>
@@ -849,6 +932,8 @@ export function JjChangesView({
 									truncated={dagQuery.data?.truncated ?? false}
 									isEditPending={editMutation.isPending}
 									availableBookmarks={allBookmarks}
+									selectedChangeId={selectedHistory?.changeId ?? null}
+									onSelect={handleSelectHistoryChange}
 									onEdit={handleEdit}
 									onNewChild={handleNewChild}
 									onSquashInto={handleSquashInto}
@@ -861,6 +946,100 @@ export function JjChangesView({
 									onBookmarkRename={openRenameBookmarkPrompt}
 									onBookmarkDelete={handleBookmarkDelete}
 								/>
+							</CollapsibleContent>
+						</Collapsible>
+					)}
+
+					{/* Selected historical change detail */}
+					{selectedHistory && (
+						<Collapsible
+							open={sections.selectedHistory}
+							onOpenChange={() => toggleSection("selectedHistory")}
+							className="min-w-0 border-t border-border"
+						>
+							<div className="group flex items-center min-w-0">
+								<CollapsibleTrigger
+									className={cn(
+										"flex-1 flex items-center gap-1.5 px-2 py-1.5 text-left min-w-0",
+										"hover:bg-accent/30 cursor-pointer transition-colors",
+									)}
+								>
+									<VscChevronRight
+										className={cn(
+											"size-3 text-muted-foreground shrink-0 transition-transform duration-150",
+											sections.selectedHistory && "rotate-90",
+										)}
+									/>
+									<span className="text-xs font-medium truncate">
+										Change {selectedHistory.changeId}
+									</span>
+									<span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+										{selectedHistory.shortCommitId}
+									</span>
+								</CollapsibleTrigger>
+								<div className="pr-1.5 shrink-0">
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="size-5"
+												onClick={() => setSelectedHistory(null)}
+											>
+												<VscClose className="size-3" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent side="bottom">
+											Close change view
+										</TooltipContent>
+									</Tooltip>
+								</div>
+							</div>
+							<CollapsibleContent className="px-0.5 pb-1 min-w-0 overflow-hidden">
+								<div className="px-2 py-1.5 space-y-1 border-b border-border/60">
+									<div className="text-xs whitespace-pre-wrap break-words">
+										{selectedHistory.description.trim() || (
+											<span className="text-muted-foreground/60 italic">
+												(no description)
+											</span>
+										)}
+									</div>
+									<div className="text-[10px] text-muted-foreground">
+										{selectedHistory.author} · {selectedHistory.timestamp}
+									</div>
+								</div>
+								{selectedHistoryFilesQuery.isLoading ? (
+									<div className="px-2 py-2 text-[11px] text-muted-foreground">
+										Loading files…
+									</div>
+								) : selectedHistoryFilesQuery.error ? (
+									<div className="px-2 py-2 text-[11px] text-destructive">
+										Failed to load: {selectedHistoryFilesQuery.error.message}
+									</div>
+								) : (selectedHistoryFilesQuery.data?.length ?? 0) === 0 ? (
+									<div className="px-2 py-2 text-[11px] text-muted-foreground">
+										No files in this change
+									</div>
+								) : (
+									<FileList
+										files={selectedHistoryFilesQuery.data ?? []}
+										viewMode={fileListViewMode}
+										selectedFile={selectedFile}
+										selectedCommitHash={selectedCommitHash}
+										onFileSelect={(file) =>
+											handleFileSelect(
+												file,
+												"committed",
+												selectedHistory.commitId,
+											)
+										}
+										worktreePath={worktreePath}
+										category="committed"
+										commitHash={selectedHistory.commitId}
+										isExpandedView={isExpandedView}
+										projectId={projectId}
+									/>
+								)}
 							</CollapsibleContent>
 						</Collapsible>
 					)}
@@ -883,7 +1062,8 @@ export function JjChangesView({
 					squashIntoMutation.isPending ||
 					rebaseMutation.isPending ||
 					abandonMutation.isPending ||
-					backoutMutation.isPending
+					backoutMutation.isPending ||
+					newMutation.isPending
 				}
 			/>
 			<ConflictEditor

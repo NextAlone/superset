@@ -29,6 +29,8 @@ interface RevisionDagProps {
 	truncated: boolean;
 	isEditPending?: boolean;
 	availableBookmarks?: string[];
+	selectedChangeId?: string | null;
+	onSelect?: (node: DagNode) => void;
 	onEdit?: (changeId: string) => void;
 	onNewChild?: (changeId: string) => void;
 	onSquashInto?: (changeId: string) => void;
@@ -61,6 +63,8 @@ export function RevisionDag({
 	truncated,
 	isEditPending = false,
 	availableBookmarks = [],
+	selectedChangeId = null,
+	onSelect,
 	onEdit,
 	onNewChild,
 	onSquashInto,
@@ -193,6 +197,8 @@ export function RevisionDag({
 						node={row.node}
 						isEditPending={isEditPending}
 						availableBookmarks={availableBookmarks}
+						isSelected={selectedChangeId === row.node.changeId}
+						onSelect={onSelect}
 						onEdit={onEdit}
 						onNewChild={onNewChild}
 						onSquashInto={onSquashInto}
@@ -228,6 +234,8 @@ interface DagNodeRowProps {
 	node: DagNode;
 	isEditPending: boolean;
 	availableBookmarks: string[];
+	isSelected?: boolean;
+	onSelect?: (node: DagNode) => void;
 	onEdit?: (changeId: string) => void;
 	onNewChild?: (changeId: string) => void;
 	onSquashInto?: (changeId: string) => void;
@@ -245,6 +253,8 @@ function DagNodeRow({
 	node,
 	isEditPending,
 	availableBookmarks,
+	isSelected = false,
+	onSelect,
 	onEdit,
 	onNewChild,
 	onSquashInto,
@@ -269,12 +279,15 @@ function DagNodeRow({
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger asChild>
-				<div
+				<button
+					type="button"
 					className={cn(
-						"flex items-center gap-1.5 pl-1 pr-1.5 text-xs rounded-sm min-w-0 hover:bg-accent/30 cursor-default",
+						"w-full flex items-center gap-1.5 pl-1 pr-1.5 text-xs rounded-sm min-w-0 text-left hover:bg-accent/30 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 						node.isWorkingCopy && "bg-accent/40",
+						isSelected && "bg-accent ring-1 ring-ring",
 					)}
 					style={{ height: ROW_HEIGHT }}
+					onClick={() => onSelect?.(node)}
 				>
 					<Tooltip>
 						<TooltipTrigger asChild>
@@ -305,7 +318,7 @@ function DagNodeRow({
 							onDelete={onBookmarkDelete}
 						/>
 					))}
-				</div>
+				</button>
 			</ContextMenuTrigger>
 			<ContextMenuContent className="w-52">
 				<ContextMenuItem
