@@ -53,6 +53,10 @@ export default defineConfig({
 				process.env.SKIP_ENV_VALIDATION,
 				"",
 			),
+			"process.env.DISABLE_AUTO_UPDATE": defineEnv(
+				process.env.DISABLE_AUTO_UPDATE,
+				"",
+			),
 			"process.env.NEXT_PUBLIC_API_URL": defineEnv(
 				process.env.NEXT_PUBLIC_API_URL,
 				"https://api.superset.sh",
