@@ -298,6 +298,33 @@ export function setupCopyHandler(xterm: XTerm): () => void {
 }
 
 /**
+ * Copy current xterm selection to the clipboard on mouseup (iTerm-style
+ * "copy on select"). No-op when no drag-selection is active.
+ */
+export function setupAutoCopyOnSelect(xterm: XTerm): () => void {
+	const element = xterm.element;
+	if (!element) return () => {};
+
+	const handleMouseUp = () => {
+		if (!xterm.hasSelection()) return;
+		const selection = xterm.getSelection();
+		if (!selection) return;
+		const trimmed = selection
+			.split("\n")
+			.map((line) => line.trimEnd())
+			.join("\n");
+		if (!trimmed) return;
+		void navigator.clipboard?.writeText(trimmed).catch(() => {});
+	};
+
+	element.addEventListener("mouseup", handleMouseUp);
+
+	return () => {
+		element.removeEventListener("mouseup", handleMouseUp);
+	};
+}
+
+/**
  * Setup keyboard handling for xterm including:
  * - Shortcut forwarding: App hotkeys bubble to document where useAppHotkey listens
  * - Shift+Enter: Sends ESC+CR sequence (to avoid \ appearing in Claude Code while keeping line continuation behavior)

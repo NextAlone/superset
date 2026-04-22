@@ -18,6 +18,7 @@ import { scheduleTerminalAttach } from "../attach-scheduler";
 import { isCommandEchoed, sanitizeForTitle } from "../commandBuffer";
 import { DEBUG_TERMINAL, FIRST_RENDER_RESTORE_FALLBACK_MS } from "../config";
 import {
+	setupAutoCopyOnSelect,
 	setupClickToMoveCursor,
 	setupCopyHandler,
 	setupFocusListener,
@@ -49,6 +50,16 @@ type UnregisterCallback = (paneId: string) => void;
 
 const attachInFlightByPane = new Map<string, number>();
 const attachWaitersByPane = new Map<string, Set<() => void>>();
+
+// Claude Code emits pane-status OSC titles like "●superset: done" / "superset: working"
+// on every agent-state transition. Ignore these so they don't overwrite the Haiku
+// summary title or a user-assigned pane name.
+const CC_STATUS_TITLE_RE =
+	/^●?\s*[^:\n]+:\s*(working|done|idle|error|needs approval|waiting)\s*$/i;
+
+// Generic agent app names emitted on startup / idle that also clobber the Haiku summary.
+const AGENT_GENERIC_TITLE_RE =
+	/^(Claude Code|Codex|OpenCode|Gemini|Copilot|Amp|Droid|Mastracode)(\s*\(.+\))?$/i;
 
 function markAttachInFlight(paneId: string, attachId: number): void {
 	attachInFlightByPane.set(paneId, attachId);
@@ -815,10 +826,11 @@ export function useTerminalLifecycle({
 		const inputDisposable = xterm.onData(handleTerminalInput);
 		const keyDisposable = xterm.onKey(handleKeyPress);
 		const titleDisposable = xterm.onTitleChange((title) => {
-			if (title) {
-				setPaneNameRef.current(paneId, title);
-				renameUnnamedWorkspaceRef.current(title);
-			}
+			if (!title) return;
+			if (CC_STATUS_TITLE_RE.test(title)) return;
+			if (AGENT_GENERIC_TITLE_RE.test(title.trim())) return;
+			setPaneNameRef.current(paneId, title);
+			renameUnnamedWorkspaceRef.current(title);
 		});
 
 		const handleClear = () => {
@@ -865,6 +877,7 @@ export function useTerminalLifecycle({
 			handleTerminalFocusRef.current(),
 		);
 		const cleanupCopy = setupCopyHandler(xterm);
+		const cleanupAutoCopy = setupAutoCopyOnSelect(xterm);
 
 		const isPaneDestroyedInStore = () =>
 			isPaneDestroyed(useTabsStore.getState().panes, paneId);
@@ -896,6 +909,7 @@ export function useTerminalLifecycle({
 			cleanupClickToMove();
 			cleanupFocus?.();
 			cleanupCopy();
+			cleanupAutoCopy();
 			unregisterClearCallbackRef.current(paneId);
 			unregisterScrollToBottomCallbackRef.current(paneId);
 			unregisterGetSelectionCallbackRef.current(paneId);

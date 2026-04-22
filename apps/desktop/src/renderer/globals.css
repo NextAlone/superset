@@ -181,6 +181,14 @@
 		height: 100%;
 		width: 100%;
 	}
+	.xterm,
+	.xterm .xterm-screen,
+	.xterm .xterm-rows,
+	.xterm .xterm-helper-textarea {
+		user-select: text;
+		-webkit-user-select: text;
+	}
+
 	.xterm .xterm-rows a {
 		color: inherit;
 		cursor: pointer;
