@@ -285,15 +285,15 @@
     {
       "idx": 40,
       "version": "6",
-      "when": 1776556800000,
-      "tag": "0040_add_vcs_type_to_projects",
+      "when": 1776796221146,
+      "tag": "0040_agent_preset_permissions_migrated_at",
       "breakpoints": true
     },
     {
       "idx": 41,
       "version": "6",
-      "when": 1776776428315,
-      "tag": "0041_workspace_type_folder",
+      "when": 1776824827503,
+      "tag": "0041_folder_workspaces_and_vcs_type",
       "breakpoints": true
     }
   ]

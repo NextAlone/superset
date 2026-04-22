@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5b8255aa-6522-4b17-a639-5ff0f93f072d",
-  "prevId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "id": "67deaca8-078c-4248-8c75-bbff237a307e",
+  "prevId": "ecc4c8b8-883e-4e25-8ae4-d4d6298d1030",
   "tables": {
     "browser_history": {
       "name": "browser_history",
@@ -462,6 +462,13 @@
         "agent_custom_definitions": {
           "name": "agent_custom_definitions",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "agent_preset_permissions_migrated_at": {
+          "name": "agent_preset_permissions_migrated_at",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

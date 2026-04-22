@@ -27,4 +27,5 @@ PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE INDEX `workspaces_project_id_idx` ON `workspaces` (`project_id`);--> statement-breakpoint
 CREATE INDEX `workspaces_worktree_id_idx` ON `workspaces` (`worktree_id`);--> statement-breakpoint
 CREATE INDEX `workspaces_last_opened_at_idx` ON `workspaces` (`last_opened_at`);--> statement-breakpoint
-CREATE INDEX `workspaces_section_id_idx` ON `workspaces` (`section_id`);
+CREATE INDEX `workspaces_section_id_idx` ON `workspaces` (`section_id`);--> statement-breakpoint
+ALTER TABLE `projects` ADD `vcs_type` text;
