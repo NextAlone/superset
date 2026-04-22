@@ -3,9 +3,12 @@ import { chmodSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import * as schema from "@superset/local-db";
 
+import type BetterSqlite3 from "better-sqlite3";
 import Database from "better-sqlite3";
+import { getTableColumns, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { getTableName } from "drizzle-orm/table";
 import { app } from "electron";
 import { validate as uuidValidate, version as uuidVersion } from "uuid";
 import { env } from "../../env.main";
@@ -95,12 +98,93 @@ console.log(`[local-db] Running migrations from: ${migrationsFolder}`);
 
 export const localDb = drizzle(sqlite, { schema });
 
+let migrateError: unknown = null;
 try {
 	migrate(localDb, { migrationsFolder });
 } catch (error) {
+	migrateError = error;
 	console.error("[local-db] Migration failed:", error);
+}
+
+// Workaround for silent migrate failures (e.g. drizzle recording a migration
+// as applied while its ALTER statement silently rolled back — see the
+// `0040_agent_preset_permissions_migrated_at` incident on the 1.5.8 merge).
+// After migrate(), reconcile every declared schema table against actual
+// PRAGMA info and backfill any missing column. Only simple ADD COLUMN is
+// attempted — rebuilds, foreign keys and indexes are left to real migrations.
+reconcileSchemaDrift(sqlite, schema);
+
+if (migrateError) {
+	console.warn(
+		"[local-db] Migration failed earlier; continuing after schema reconcile.",
+	);
 }
 
 console.log("[local-db] Migrations complete");
 
 export type LocalDb = typeof localDb;
+
+type PragmaColumn = { name: string; type: string; notnull: number };
+
+function reconcileSchemaDrift(
+	db: BetterSqlite3.Database,
+	schemaExports: Record<string, unknown>,
+): void {
+	for (const value of Object.values(schemaExports)) {
+		if (!isDrizzleTable(value)) continue;
+		const tableName = getTableName(value);
+		const existingColumns = new Set(
+			(
+				db.prepare(`PRAGMA table_info("${tableName}")`).all() as PragmaColumn[]
+			).map((row) => row.name),
+		);
+		if (existingColumns.size === 0) continue; // table not created yet — leave it to migrate()
+
+		for (const column of Object.values(getTableColumns(value))) {
+			const name = column.name;
+			if (existingColumns.has(name)) continue;
+			if (column.primary) continue; // can't add PK retroactively
+			if (column.notNull && column.default === undefined) continue; // can't add NOT NULL without default
+
+			const sqlType = column.getSQLType();
+			const defaultClause = buildDefaultClause(column.default);
+			const ddl = `ALTER TABLE "${tableName}" ADD COLUMN "${name}" ${sqlType}${defaultClause}`;
+			console.warn(
+				`[local-db] Schema drift detected: ${tableName}.${name} missing — running: ${ddl}`,
+			);
+			try {
+				db.exec(ddl);
+			} catch (error) {
+				console.error(
+					`[local-db] Failed to backfill ${tableName}.${name}:`,
+					error,
+				);
+			}
+		}
+	}
+}
+
+function isDrizzleTable(value: unknown): value is Table {
+	if (typeof value !== "object" || value === null) return false;
+	// Drizzle tables carry a non-enumerable internal symbol; getTableName throws otherwise.
+	try {
+		getTableName(value as Table);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function buildDefaultClause(defaultValue: unknown): string {
+	if (defaultValue === undefined) return "";
+	if (defaultValue === null) return " DEFAULT NULL";
+	if (typeof defaultValue === "number") return ` DEFAULT ${defaultValue}`;
+	if (typeof defaultValue === "boolean") {
+		return ` DEFAULT ${defaultValue ? 1 : 0}`;
+	}
+	if (typeof defaultValue === "string") {
+		return ` DEFAULT '${defaultValue.replace(/'/g, "''")}'`;
+	}
+	// SQL expressions / complex defaults: skip to be safe.
+	return "";
+}
