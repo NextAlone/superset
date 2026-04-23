@@ -1,6 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useDiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { useDeletingWorkspaces } from "renderer/routes/_authenticated/providers/DeletingWorkspacesProvider";
+import { useTabsStore } from "renderer/stores/tabs/store";
+import { extractPaneIdsFromLayout } from "renderer/stores/tabs/utils";
+import { getHighestPriorityStatus } from "shared/tabs-types";
 import type { DashboardSidebarWorkspace } from "../../types";
 import { DashboardSidebarDeleteDialog } from "../DashboardSidebarDeleteDialog";
 import { DashboardSidebarCollapsedWorkspaceButton } from "./components/DashboardSidebarCollapsedWorkspaceButton";
@@ -57,6 +60,18 @@ export function DashboardSidebarWorkspaceItem({
 		workspaceName: name,
 	});
 
+	const workspaceStatus = useTabsStore((state) => {
+		function* paneStatuses() {
+			for (const tab of state.tabs) {
+				if (tab.workspaceId !== id) continue;
+				for (const paneId of extractPaneIdsFromLayout(tab.layout)) {
+					yield state.panes[paneId]?.status;
+				}
+			}
+		}
+		return getHighestPriorityStatus(paneStatuses());
+	});
+
 	const navigate = useNavigate();
 	const isPending = !!creationStatus;
 	// Keep the delete dialog outside the hidden wrapper below — the destroy
@@ -84,6 +99,7 @@ export function DashboardSidebarWorkspaceItem({
 				<DashboardSidebarCollapsedWorkspaceButton
 					hostType={hostType}
 					isActive={isActive}
+					workspaceStatus={workspaceStatus}
 					onClick={isPending ? handlePendingClick : handleClick}
 					creationStatus={creationStatus}
 					disabled={isPending}
@@ -149,6 +165,7 @@ export function DashboardSidebarWorkspaceItem({
 			renameValue={renameValue}
 			shortcutLabel={shortcutLabel}
 			diffStats={isPending ? null : diffStats}
+			workspaceStatus={workspaceStatus}
 			onClick={isPending ? handlePendingClick : handleClick}
 			onDoubleClick={isPending ? undefined : startRename}
 			onDeleteClick={() => setIsDeleteDialogOpen(true)}

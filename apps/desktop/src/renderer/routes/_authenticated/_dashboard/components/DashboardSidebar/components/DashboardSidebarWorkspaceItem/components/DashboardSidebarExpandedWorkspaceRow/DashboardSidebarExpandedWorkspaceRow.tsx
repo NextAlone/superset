@@ -11,6 +11,7 @@ import { HiMiniXMark } from "react-icons/hi2";
 import type { DiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { HotkeyLabel } from "renderer/hotkeys";
 import { RenameInput } from "renderer/screens/main/components/WorkspaceSidebar/RenameInput";
+import type { ActivePaneStatus } from "shared/tabs-types";
 import type { DashboardSidebarWorkspace } from "../../../../types";
 import { getCreationStatusText } from "../../utils/getCreationStatusText";
 import { DashboardSidebarWorkspaceDiffStats } from "../DashboardSidebarWorkspaceDiffStats";
@@ -25,6 +26,7 @@ interface DashboardSidebarExpandedWorkspaceRowProps
 	renameValue: string;
 	shortcutLabel?: string;
 	diffStats: DiffStats | null;
+	workspaceStatus?: ActivePaneStatus | null;
 	onClick?: () => void;
 	onDoubleClick?: () => void;
 	onDeleteClick: () => void;
@@ -45,6 +47,7 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 			renameValue,
 			shortcutLabel,
 			diffStats,
+			workspaceStatus = null,
 			onClick,
 			onDoubleClick,
 			onDeleteClick,
@@ -66,6 +69,9 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 		} = workspace;
 		const showsStandaloneActiveStripe = accentColor == null;
 		const localRef = useRef<HTMLDivElement>(null);
+
+		const hasAttentionStatus =
+			workspaceStatus === "review" || workspaceStatus === "permission";
 
 		useEffect(() => {
 			if (isActive) {
@@ -110,10 +116,29 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 				)}
 				{...props}
 			>
-				{isActive && showsStandaloneActiveStripe && (
+				{isActive && showsStandaloneActiveStripe && !hasAttentionStatus && (
 					<div
 						className="absolute top-0 bottom-0 left-0 w-0.5 rounded-r"
 						style={{ backgroundColor: "var(--color-foreground)" }}
+					/>
+				)}
+				{hasAttentionStatus && (
+					<div
+						aria-hidden="true"
+						className={cn(
+							"pointer-events-none absolute inset-0",
+							isActive && "animate-pulse",
+						)}
+						style={{
+							backgroundImage:
+								workspaceStatus === "review"
+									? "linear-gradient(to right, rgba(34,197,94,0.22), rgba(34,197,94,0.06) 45%, transparent)"
+									: "linear-gradient(to right, rgba(239,68,68,0.28), rgba(239,68,68,0.08) 45%, transparent)",
+							boxShadow:
+								workspaceStatus === "review"
+									? "inset 3px 0 0 #22c55e"
+									: "inset 3px 0 0 #ef4444",
+						}}
 					/>
 				)}
 
@@ -124,7 +149,7 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 								hostType={hostType}
 								isActive={isActive}
 								variant="expanded"
-								workspaceStatus={null}
+								workspaceStatus={workspaceStatus}
 								creationStatus={creationStatus}
 							/>
 						</div>
@@ -137,7 +162,7 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 					</TooltipContent>
 				</Tooltip>
 
-				<div className="flex min-w-0 flex-1 flex-col justify-center">
+				<div className="relative flex min-w-0 flex-1 flex-col justify-center">
 					<div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-2 items-center gap-x-1.5 gap-y-0.5">
 						{isRenaming ? (
 							<RenameInput

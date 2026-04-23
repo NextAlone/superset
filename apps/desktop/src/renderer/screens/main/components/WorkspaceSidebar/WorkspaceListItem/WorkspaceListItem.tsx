@@ -266,6 +266,9 @@ export function WorkspaceListItem({
 	const showBranchSubtitle =
 		!isFolderWorkspace && (isBranchWorkspace || (!!name && name !== branch));
 
+	const hasAttentionStatus =
+		workspaceStatus === "review" || workspaceStatus === "permission";
+
 	if (isCollapsed) {
 		return (
 			<CollapsedWorkspaceItem
@@ -319,13 +322,32 @@ export function WorkspaceListItem({
 			)}
 			style={{ cursor: isDragging ? "grabbing" : "pointer" }}
 		>
-			{isActive && (
+			{isActive && !hasAttentionStatus && (
 				<div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary rounded-r" />
+			)}
+			{hasAttentionStatus && (
+				<div
+					aria-hidden="true"
+					className={cn(
+						"pointer-events-none absolute inset-0",
+						isActive && "animate-pulse",
+					)}
+					style={{
+						backgroundImage:
+							workspaceStatus === "review"
+								? "linear-gradient(to right, rgba(34,197,94,0.22), rgba(34,197,94,0.06) 45%, transparent)"
+								: "linear-gradient(to right, rgba(239,68,68,0.28), rgba(239,68,68,0.08) 45%, transparent)",
+						boxShadow:
+							workspaceStatus === "review"
+								? "inset 3px 0 0 #22c55e"
+								: "inset 3px 0 0 #ef4444",
+					}}
+				/>
 			)}
 
 			<div
 				className={cn(
-					"flex flex-col items-center shrink-0 mr-2.5 gap-0.5",
+					"relative flex flex-col items-center shrink-0 mr-2.5 gap-0.5",
 					showBranchSubtitle && "mt-0.5",
 				)}
 			>
@@ -373,7 +395,7 @@ export function WorkspaceListItem({
 				)}
 			</div>
 
-			<div className="flex-1 min-w-0">
+			<div className="relative flex-1 min-w-0">
 				{rename.isRenaming ? (
 					<Input
 						ref={rename.inputRef}

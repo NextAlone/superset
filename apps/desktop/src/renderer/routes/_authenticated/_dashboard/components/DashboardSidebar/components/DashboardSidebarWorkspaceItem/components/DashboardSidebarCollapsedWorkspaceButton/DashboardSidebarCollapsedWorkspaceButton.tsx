@@ -27,6 +27,9 @@ export const DashboardSidebarCollapsedWorkspaceButton = forwardRef<
 		},
 		ref,
 	) => {
+		const hasAttentionStatus =
+			workspaceStatus === "review" || workspaceStatus === "permission";
+
 		return (
 			<button
 				type="button"
@@ -35,8 +38,23 @@ export const DashboardSidebarCollapsedWorkspaceButton = forwardRef<
 					"relative flex items-center justify-center size-8 rounded-md",
 					"hover:bg-muted/50 transition-colors cursor-pointer",
 					isActive && "bg-muted",
+					isActive && hasAttentionStatus && "animate-pulse",
 					className,
 				)}
+				style={
+					hasAttentionStatus
+						? {
+								backgroundColor:
+									workspaceStatus === "review"
+										? "rgba(34,197,94,0.12)"
+										: "rgba(239,68,68,0.14)",
+								boxShadow:
+									workspaceStatus === "review"
+										? "inset 0 0 0 1px rgba(34,197,94,0.45)"
+										: "inset 0 0 0 1px rgba(239,68,68,0.55)",
+							}
+						: undefined
+				}
 				{...props}
 			>
 				<DashboardSidebarWorkspaceIcon
