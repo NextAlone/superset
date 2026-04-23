@@ -7,6 +7,7 @@ import { DashboardSidebarWorkspaceIcon } from "../DashboardSidebarWorkspaceIcon"
 interface DashboardSidebarCollapsedWorkspaceButtonProps
 	extends ComponentPropsWithoutRef<"button"> {
 	hostType: DashboardSidebarWorkspaceHostType;
+	hostIsOnline: boolean | null;
 	isActive: boolean;
 	workspaceStatus?: ActivePaneStatus | null;
 	creationStatus?: "preparing" | "generating-branch" | "creating" | "failed";
@@ -19,6 +20,7 @@ export const DashboardSidebarCollapsedWorkspaceButton = forwardRef<
 	(
 		{
 			hostType,
+			hostIsOnline,
 			isActive,
 			workspaceStatus = null,
 			creationStatus,
@@ -59,6 +61,7 @@ export const DashboardSidebarCollapsedWorkspaceButton = forwardRef<
 			>
 				<DashboardSidebarWorkspaceIcon
 					hostType={hostType}
+					hostIsOnline={hostIsOnline}
 					isActive={isActive}
 					variant="collapsed"
 					workspaceStatus={workspaceStatus}

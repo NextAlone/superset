@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "67deaca8-078c-4248-8c75-bbff237a307e",
+  "id": "3d1d0ce7-6731-4286-970a-304b4e0a1f6a",
   "prevId": "ecc4c8b8-883e-4e25-8ae4-d4d6298d1030",
   "tables": {
     "browser_history": {
@@ -386,13 +386,6 @@
         },
         "default_app": {
           "name": "default_app",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "vcs_type": {
-          "name": "vcs_type",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1033,6 +1026,82 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "v1_migration_state": {
+      "name": "v1_migration_state",
+      "columns": {
+        "v1_id": {
+          "name": "v1_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "v2_id": {
+          "name": "v2_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "migrated_at": {
+          "name": "migrated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "v1_migration_state_v2_id_idx": {
+          "name": "v1_migration_state_v2_id_idx",
+          "columns": [
+            "v2_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "v1_migration_state_organization_id_v1_id_kind_pk": {
+          "columns": [
+            "organization_id",
+            "v1_id",
+            "kind"
+          ],
+          "name": "v1_migration_state_organization_id_v1_id_kind_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "workspace_sections": {
       "name": "workspace_sections",
       "columns": {
@@ -1150,7 +1219,7 @@
           "name": "branch",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "name": {

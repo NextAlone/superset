@@ -62,6 +62,7 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 		const {
 			accentColor = null,
 			hostType,
+			hostIsOnline,
 			name,
 			branch,
 			pullRequest,
@@ -147,6 +148,7 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 						<div className="relative mr-2.5 flex size-5 shrink-0 items-center justify-center">
 							<DashboardSidebarWorkspaceIcon
 								hostType={hostType}
+								hostIsOnline={hostIsOnline}
 								isActive={isActive}
 								variant="expanded"
 								workspaceStatus={workspaceStatus}
@@ -155,9 +157,23 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 						</div>
 					</TooltipTrigger>
 					<TooltipContent side="right" sideOffset={8}>
-						<p className="text-xs font-medium">Worktree workspace</p>
+						<p className="text-xs font-medium">
+							{hostType === "local-device"
+								? "Local workspace"
+								: hostType === "remote-device"
+									? hostIsOnline === false
+										? "Remote workspace — device offline"
+										: "Remote workspace"
+									: "Cloud workspace"}
+						</p>
 						<p className="text-xs text-muted-foreground">
-							Isolated copy for parallel development
+							{hostType === "local-device"
+								? "Running on this device"
+								: hostType === "remote-device"
+									? hostIsOnline === false
+										? "The associated device isn't reachable right now"
+										: "Running on a paired device"
+									: "Hosted in the cloud"}
 						</p>
 					</TooltipContent>
 				</Tooltip>
