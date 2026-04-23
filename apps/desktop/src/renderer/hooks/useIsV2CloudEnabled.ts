@@ -8,7 +8,7 @@ import { useV2LocalOverrideStore } from "renderer/stores/v2-local-override";
  */
 export function useIsV2CloudEnabled() {
 	const remoteV2Enabled =
-		useFeatureFlagEnabled(FEATURE_FLAGS.V2_CLOUD) ?? false;
+		(useFeatureFlagEnabled(FEATURE_FLAGS.V2_CLOUD) ?? false) || true;
 	const forceV1 = useV2LocalOverrideStore((s) => s.forceV1);
 
 	return {
