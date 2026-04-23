@@ -79,15 +79,12 @@ export function useAgentHookListener() {
 					const activeTabId = state.activeTabIds[workspaceId];
 					const pane = state.panes[paneId];
 					const tabId = pane?.tabId;
-					// Tab must be active for this workspace
+					// Tab must be active for this workspace AND user must be viewing
+					// that workspace. focusedPaneIds is tab-local (not global focus),
+					// so it can't tell us whether the user is actually here.
 					const isTabActive = tabId != null && tabId === activeTabId;
-					// User is on this workspace if the URL hash matches OR if they have this
-					// pane focused (more reliable than URL parsing which can lag behind navigation)
-					const isPaneFocused =
-						tabId != null && state.focusedPaneIds[tabId] === paneId;
 					const isInActiveTab =
-						isTabActive &&
-						(getCurrentWorkspaceId() === workspaceId || isPaneFocused);
+						isTabActive && getCurrentWorkspaceId() === workspaceId;
 
 					// If stopping from a pending question state, always go idle (user already engaged)
 					const nextStatus =
