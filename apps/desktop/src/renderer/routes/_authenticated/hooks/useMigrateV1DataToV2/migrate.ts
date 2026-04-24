@@ -16,7 +16,7 @@ export interface ProjectEntry {
 
 export interface WorkspaceEntry {
 	name: string;
-	branch: string;
+	branch: string | null;
 	status: WorkspaceStatus;
 	reason?: string;
 }
@@ -214,6 +214,28 @@ export async function migrateV1DataToV2(args: Args): Promise<MigrationSummary> {
 			continue;
 		}
 
+		// Folder workspaces (fork-only feature) have no VCS branch and no worktree,
+		// and adopt() requires a branch — skip them rather than fail.
+		if (workspace.type === "folder" || !workspace.branch) {
+			await electronTrpc.migration.upsertState.mutate({
+				v1Id: workspace.id,
+				kind: "workspace",
+				v2Id: null,
+				organizationId,
+				status: "skipped",
+				reason: "folder_workspace_unsupported",
+			});
+			summary.workspacesSkipped += 1;
+			summary.workspaces.push({
+				name: workspace.name,
+				branch: workspace.branch,
+				status: "skipped",
+				reason: "folder workspace — v2 has no equivalent",
+			});
+			continue;
+		}
+		const workspaceBranch: string = workspace.branch;
+
 		const v2ProjectId = projectV1ToV2.get(workspace.projectId);
 		if (!v2ProjectId) {
 			await electronTrpc.migration.upsertState.mutate({
@@ -263,7 +285,7 @@ export async function migrateV1DataToV2(args: Args): Promise<MigrationSummary> {
 			const result = await hostService.workspaceCreation.adopt.mutate({
 				projectId: v2ProjectId,
 				workspaceName: workspace.name,
-				branch: workspace.branch,
+				branch: workspaceBranch,
 				worktreePath: v1WorktreePath,
 			});
 			await electronTrpc.migration.upsertState.mutate({

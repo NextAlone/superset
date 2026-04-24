@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as schema from "@superset/local-db";
 
@@ -98,6 +98,18 @@ console.log(`[local-db] Running migrations from: ${migrationsFolder}`);
 
 export const localDb = drizzle(sqlite, { schema });
 
+// Fork upgrade compat: the local fork shipped `0041_folder_workspaces_and_vcs_type`
+// before upstream introduced its own `0041_v1_migration_state`. The merge renamed
+// the fork migration to `0042`, so users upgrading from fork 1.5.8 have
+// `__drizzle_migrations` stopped at the fork 0041 `when` (1776776428315) and a
+// schema that already contains vcs_type / section_id. A plain `migrate()` would
+// try to run the new 0041 + 0042 in one transaction; the re-ADD of `vcs_type` at
+// the end of 0042 fails and rolls back the entire batch, silently leaving
+// `v1_migration_state` uncreated and the v1→v2 auto-migration permanently broken.
+// Detect that exact fingerprint and pre-apply 0041 + stamp 0042 so drizzle
+// migrate() becomes a no-op for those rows.
+reconcileForkMigrationDrift(sqlite, migrationsFolder);
+
 let migrateError: unknown = null;
 try {
 	migrate(localDb, { migrationsFolder });
@@ -187,4 +199,94 @@ function buildDefaultClause(defaultValue: unknown): string {
 	}
 	// SQL expressions / complex defaults: skip to be safe.
 	return "";
+}
+
+// Fork 0041 (folder_workspaces_and_vcs_type) `when` value, recorded in users'
+// __drizzle_migrations before the upstream merge renamed it to 0042.
+const FORK_LEGACY_0041_WHEN = 1776776428315;
+const UPSTREAM_0041_V1_MIGRATION_STATE_WHEN = 1776928440569;
+const RENAMED_0042_FOLDER_WORKSPACES_WHEN = 1776928500000;
+
+function reconcileForkMigrationDrift(
+	db: BetterSqlite3.Database,
+	migrationsFolder: string,
+): void {
+	const hasMigrationsTable = db
+		.prepare(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'",
+		)
+		.get();
+	if (!hasMigrationsTable) return;
+
+	const last = db
+		.prepare(
+			"SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
+		)
+		.get() as { created_at: number | bigint } | undefined;
+	if (!last) return;
+	if (Number(last.created_at) !== FORK_LEGACY_0041_WHEN) return;
+
+	const hasV1MigrationState = db
+		.prepare(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='v1_migration_state'",
+		)
+		.get();
+	if (hasV1MigrationState) return;
+
+	// Verify the fork 0041 actually ran (projects.vcs_type + workspaces.section_id
+	// present). If those are missing we're in a different broken state and should
+	// not attempt this targeted fix.
+	const projectCols = db.prepare("PRAGMA table_info(projects)").all() as Array<{
+		name: string;
+	}>;
+	const workspaceCols = db
+		.prepare("PRAGMA table_info(workspaces)")
+		.all() as Array<{ name: string }>;
+	const hasVcsType = projectCols.some((c) => c.name === "vcs_type");
+	const hasSectionId = workspaceCols.some((c) => c.name === "section_id");
+	if (!hasVcsType || !hasSectionId) return;
+
+	const sqlPath = join(migrationsFolder, "0041_v1_migration_state.sql");
+	if (!existsSync(sqlPath)) return;
+	const sqlText = readFileSync(sqlPath, "utf-8");
+	const statements = sqlText
+		.split("--> statement-breakpoint")
+		.map((s) => s.trim())
+		.filter(Boolean);
+
+	const v1MigrationHash = createHash("sha256").update(sqlText).digest("hex");
+	const folderWorkspacesPath = join(
+		migrationsFolder,
+		"0042_folder_workspaces_and_vcs_type.sql",
+	);
+	const folderWorkspacesHash = existsSync(folderWorkspacesPath)
+		? createHash("sha256")
+				.update(readFileSync(folderWorkspacesPath, "utf-8"))
+				.digest("hex")
+		: createHash("sha256")
+				.update("0042_folder_workspaces_and_vcs_type")
+				.digest("hex");
+
+	console.warn(
+		"[local-db] Fork migration drift detected — pre-applying 0041_v1_migration_state and stamping 0042.",
+	);
+
+	const tx = db.transaction(() => {
+		for (const stmt of statements) db.exec(stmt);
+		const insert = db.prepare(
+			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+		);
+		insert.run(v1MigrationHash, UPSTREAM_0041_V1_MIGRATION_STATE_WHEN);
+		insert.run(folderWorkspacesHash, RENAMED_0042_FOLDER_WORKSPACES_WHEN);
+	});
+
+	try {
+		tx();
+		console.warn("[local-db] Fork migration drift reconciled.");
+	} catch (error) {
+		console.error(
+			"[local-db] Fork migration drift reconcile failed; falling through to migrate():",
+			error,
+		);
+	}
 }
