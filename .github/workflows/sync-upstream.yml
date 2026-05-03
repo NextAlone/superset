@@ -22,7 +22,7 @@ jobs:
         with:
           ref: ${{ env.PATCHES_BRANCH }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Configure git
         run: |
@@ -36,12 +36,73 @@ jobs:
           # of being rejected with "would clobber existing tag".
           git fetch upstream "$UPSTREAM_BRANCH" --tags --force
 
+      - name: Check sync capability
+        id: sync-capability
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          if [ -n "$SYNC_TOKEN" ]; then
+            token_available=true
+          else
+            token_available=false
+          fi
+
+          if git diff --quiet "origin/main..upstream/$UPSTREAM_BRANCH" -- .github/workflows; then
+            workflow_updates=false
+          else
+            workflow_updates=true
+          fi
+
+          echo "token_available=$token_available" >> "$GITHUB_OUTPUT"
+          echo "workflow_updates=$workflow_updates" >> "$GITHUB_OUTPUT"
+
+          if [ "$token_available" = "false" ] && [ "$workflow_updates" = "true" ]; then
+            echo "can_sync=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SYNC_TOKEN is not configured; GITHUB_TOKEN cannot push upstream workflow file updates."
+          else
+            echo "can_sync=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report missing sync token
+        if: steps.sync-capability.outputs.can_sync != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'Sync upstream requires SYNC_TOKEN';
+            const body = [
+              'Automatic upstream sync detected workflow file updates from upstream.',
+              '',
+              'The default `GITHUB_TOKEN` cannot push commits or tags that create or update `.github/workflows/*` files.',
+              '',
+              'Configure a repository secret named `SYNC_TOKEN` with a token that can update workflow files, then rerun the sync workflow.',
+            ].join('\n');
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => issue.title === title);
+            if (existing) {
+              core.notice(`Existing issue tracks this: #${existing.number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                title,
+                body,
+              });
+              core.notice(`Created issue #${issue.number}`);
+            }
+
       - name: Fast-forward main from upstream
+        if: steps.sync-capability.outputs.can_sync == 'true'
         run: |
           git checkout -B main upstream/$UPSTREAM_BRANCH
           git push origin main --tags --force-with-lease
 
       - name: Rebase patches onto upstream
+        if: steps.sync-capability.outputs.can_sync == 'true'
         id: rebase
         run: |
           git checkout "$PATCHES_BRANCH"
@@ -53,17 +114,17 @@ jobs:
           fi
 
       - name: Setup Bun
-        if: steps.rebase.outputs.status == 'ok'
+        if: steps.sync-capability.outputs.can_sync == 'true' && steps.rebase.outputs.status == 'ok'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
 
       - name: Install dependencies
-        if: steps.rebase.outputs.status == 'ok'
+        if: steps.sync-capability.outputs.can_sync == 'true' && steps.rebase.outputs.status == 'ok'
         run: bun install --frozen --ignore-scripts
 
       - name: Typecheck
-        if: steps.rebase.outputs.status == 'ok'
+        if: steps.sync-capability.outputs.can_sync == 'true' && steps.rebase.outputs.status == 'ok'
         id: build
         continue-on-error: true
         env:
@@ -71,7 +132,7 @@ jobs:
         run: bun run typecheck
 
       - name: Push rebased patches
-        if: steps.rebase.outputs.status == 'ok' && steps.build.outcome == 'success'
+        if: steps.sync-capability.outputs.can_sync == 'true' && steps.rebase.outputs.status == 'ok' && steps.build.outcome == 'success'
         run: |
           if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/$PATCHES_BRANCH)" ]; then
             echo "Nothing to push"
@@ -80,7 +141,7 @@ jobs:
           git push origin "$PATCHES_BRANCH" --force-with-lease
 
       - name: Report failure
-        if: steps.rebase.outputs.status == 'conflict' || steps.build.outcome == 'failure'
+        if: steps.sync-capability.outputs.can_sync == 'true' && (steps.rebase.outputs.status == 'conflict' || steps.build.outcome == 'failure')
         uses: actions/github-script@v7
         with:
           script: |

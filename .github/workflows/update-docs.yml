@@ -15,36 +15,61 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Check Claude auth
+        id: claude-auth
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not configured."
+            exit 1
+          fi
+          echo "::notice::ANTHROPIC_API_KEY is not configured; skipping scheduled docs update."
+
       - name: Check out code
+        if: steps.claude-auth.outputs.available == 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Setup Bun
+        if: steps.claude-auth.outputs.available == 'true'
         id: setup-bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
       - name: Cache dependencies
+        if: steps.claude-auth.outputs.available == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ steps.setup-bun.outputs.bun-revision }}-${{ hashFiles('bun.lock') }}
 
       - name: Install dependencies
+        if: steps.claude-auth.outputs.available == 'true'
         run: bun install --frozen --ignore-scripts
 
       - name: Install Claude Code
+        if: steps.claude-auth.outputs.available == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Create branch
+        if: steps.claude-auth.outputs.available == 'true'
         run: |
           BRANCH_NAME="docs/update-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
           git checkout -B "$BRANCH_NAME"
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
       - name: Update docs with Claude Code
+        if: steps.claude-auth.outputs.available == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,6 +79,7 @@ jobs:
             --allowedTools "Bash(git*)" "Bash(gh*)" "Bash(date*)" "Bash(ls*)" "Read" "Write" "Edit" "Glob" "Grep"
 
       - name: Check for changes
+        if: steps.claude-auth.outputs.available == 'true'
         id: check-changes
         run: |
           if [ -n "$(git status --porcelain)" ]; then
@@ -63,11 +89,11 @@ jobs:
           fi
 
       - name: Run lint fix
-        if: steps.check-changes.outputs.has_changes == 'true'
+        if: steps.claude-auth.outputs.available == 'true' && steps.check-changes.outputs.has_changes == 'true'
         run: bun run lint:fix
 
       - name: Commit and push changes
-        if: steps.check-changes.outputs.has_changes == 'true'
+        if: steps.claude-auth.outputs.available == 'true' && steps.check-changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -76,7 +102,7 @@ jobs:
           git push origin "$BRANCH_NAME"
 
       - name: Create Pull Request
-        if: steps.check-changes.outputs.has_changes == 'true'
+        if: steps.claude-auth.outputs.available == 'true' && steps.check-changes.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
