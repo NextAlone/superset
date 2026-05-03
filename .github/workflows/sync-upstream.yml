@@ -83,16 +83,20 @@ jobs:
               per_page: 100,
             });
             const existing = issues.find((issue) => issue.title === title);
-            if (existing) {
-              core.notice(`Existing issue tracks this: #${existing.number}`);
-            } else {
-              const { data: issue } = await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo:  context.repo.repo,
-                title,
-                body,
-              });
-              core.notice(`Created issue #${issue.number}`);
+            try {
+              if (existing) {
+                core.notice(`Existing issue tracks this: #${existing.number}`);
+              } else {
+                const { data: issue } = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  title,
+                  body,
+                });
+                core.notice(`Created issue #${issue.number}`);
+              }
+            } catch (error) {
+              core.warning(`Could not create tracking issue: ${error.message}`);
             }
 
       - name: Fast-forward main from upstream

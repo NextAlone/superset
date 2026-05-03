@@ -19,7 +19,6 @@ jobs:
         id: claude-auth
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ -n "$ANTHROPIC_API_KEY" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
@@ -27,11 +26,7 @@ jobs:
           fi
 
           echo "available=false" >> "$GITHUB_OUTPUT"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "::error::ANTHROPIC_API_KEY is not configured."
-            exit 1
-          fi
-          echo "::notice::ANTHROPIC_API_KEY is not configured; skipping scheduled changelog generation."
+          echo "::notice::ANTHROPIC_API_KEY is not configured; skipping changelog generation."
 
       - name: Check out code
         if: steps.claude-auth.outputs.available == 'true'
