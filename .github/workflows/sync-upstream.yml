@@ -103,7 +103,8 @@ jobs:
         if: steps.sync-capability.outputs.can_sync == 'true'
         run: |
           git checkout -B main upstream/$UPSTREAM_BRANCH
-          git push origin main --tags --force-with-lease
+          git push origin main --force-with-lease
+          git push origin --tags --force
 
       - name: Rebase patches onto upstream
         if: steps.sync-capability.outputs.can_sync == 'true'
